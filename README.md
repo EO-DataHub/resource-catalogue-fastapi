@@ -1,18 +1,22 @@
-# UK EO Data Hub Platform: template repository
+# UK EO Data Hub Platform: ADES-FastApi Component
 
-This serves as a template repository for new UKEODHP Python-base software components.
+This component is the initial implementation of the User Account Service that sits in front of the ADES service and allows more refined interaction with the workflow runner within the EO Data Hub. This repository provides a FastApi application that makes calls to the ADES component, also containing middleware which authenticates the incoming requests using an OPA client. Access to workflows and jobs is only provided if the username of the requesting user matches that found in the URL request.
 
-When using this template remember to:
-* Edit `pyproject.toml` and set everything marked `CHANGEME`
-* Update the dependencies as described below.
-* Create a Docker repo in AWS (https://eu-west-2.console.aws.amazon.com/ecr/create-repository?region=eu-west-2 for
-  the Telespazio UKEODHP repos) and update `Makefile` with the name of the Docker image to build.
-* Consider adding `dockerrun` and/or `run` targets to the `Makefile`.
-* Update `Dockerfile`
-* Add a description here of how to do local development.
+Note swagger static files are available in the [swagger-ui](https://github.com/swagger-api/swagger-ui/tree/master/dist) repo.
+
 
 # Development of this component
 
+## Run the server locally
+This application uses a uvicorn server to run the FastApi application, you can initiate this server locally using the below command: 
+```commandline
+uvicorn resource_catalogue_fastapi:app --reload
+```
+This application also requires access an ADES service as well as an OPA client via URLs, which can be provided using the following environment variables:
+```commandline
+OPA_SERVICE_ENDPOINT
+ADES_SERVICE_ENDPOINT
+```
 ## Getting started
 
 ### Install via makefile
@@ -58,8 +62,9 @@ You should also configure your IDE to use black so that code is automatically re
 
 ## Building and testing
 
-This component uses `pytest` tests and the `ruff` and `black` linters. `black` will reformat your code in an
-opinionated way.
+This component uses `pytest` tests and the `ruff` and `black` linters. `black` will reformat your code in an opinionated way.  
+When testing this module, you need to ensure you have unset the environment variable `ENABLE_OPA_POLICY_CHECK`, or set it to `true`: `export ENABLE_OPA_POLICY_CHECK=true`,
+so ensure the policy is checked when testing.
 
 A number of `make` targets are defined:
 * `make test`: run tests continuously
@@ -102,14 +107,3 @@ example, using
 
 * `git tag 1.2.3`
 * `git push --tags`
-
-Normally, Docker images will be built automatically after pushing to the UKEODHP repos. Images can also be created
-manually in the following way:
-
-* For versioned images create a git tag.
-* Log in to the Docker repository service. For the UKEODHP environment this can be achieved with the following command
-  ```AWS_ACCESS_KEY_ID=...  AWS_SECRET_ACCESS_KEY=... aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 312280911266.dkr.ecr.eu-west-2.amazonaws.com```
-  You will need to create an access key for a user with permission to modify ECR first.
-* Run `make dockerbuild` (for images tagged `latest`) or `make dockerbuild VERSION=1.2.3` for a release tagged `1.2.3`.
-  The image will be available locally within Docker after this step.
-* Run `make dockerpush` or `make dockerpush VERSION=1.2.3`. This will send the image to the ECR repository.

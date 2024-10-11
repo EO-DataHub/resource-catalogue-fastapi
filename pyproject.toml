@@ -13,9 +13,9 @@
 # limitations under the License.
 
 [project]
-name = "CHANGEME-component-name"
+name = "resource-catalogue-fastapi"
 version = "0.1.0"
-description = "CHANGEME a short description"
+description = "A FastApi deployment to handle requests to update the resource catalogue"
 readme = "README.md"
 
 # Our target version is Python 3.11, but it may work with earlier versions.
@@ -27,11 +27,11 @@ license = {file = "LICENSE"}
 # authored the project, and a valid email address corresponding to the name
 # listed.
 authors = [
-  {name = "Telespazio UK Ltd", email = "CHANGEME-alex.hayward@telespazio.com" }
+  {name = "Telespazio UK Ltd", email = "alex.palmer@telespazio.com" }
 ]
 
 maintainers = [
-  {name = "Telespazio UK Ltd", email = "CHANGEME-alex.hayward@telespazio.com" }
+  {name = "Telespazio UK Ltd", email = "alex.palmer@telespazio.com" }
 ]
 
 # Classifiers help users find your project by categorizing it.
@@ -64,6 +64,13 @@ classifiers = [
 # For an analysis of this field vs pip's requirements files see:
 # https://packaging.python.org/discussions/install-requires-vs-requirements/
 dependencies = [
+  "fastapi",
+  "uvicorn",
+  "requests",
+  "pyjwt",
+  "pyyaml",
+  "boto3",
+  "pulsar-client",
 ]
 
 # List additional groups of dependencies here (e.g. development
@@ -105,7 +112,7 @@ markers = [
 ]
 
 [tool.setuptools]
-packages = ["CHANGEME-pythonpkgname"]
+packages = []
 
 [tool.black]
 line-length = 100

@@ -1,17 +1,17 @@
 .PHONY: dockerbuild dockerpush test testonce ruff black lint isort pre-commit-check requirements-update requirements setup
-VERSION ?= latest
-IMAGENAME = CHANGEME
-DOCKERREPO ?= public.ecr.aws/n1b3o1k2/ukeodhp
+VERSION ?= 0.0.1-rc1
+IMAGENAME = resource-catalogue-fastapi
+DOCKERREPO ?= public.ecr.aws/n1b3o1k2
 
 dockerbuild:
 	DOCKER_BUILDKIT=1 docker build -t ${IMAGENAME}:${VERSION} .
 
-dockerpush: dockerbuild testdocker
+dockerpush: dockerbuild
 	docker tag ${IMAGENAME}:${VERSION} ${DOCKERREPO}/${IMAGENAME}:${VERSION}
 	docker push ${DOCKERREPO}/${IMAGENAME}:${VERSION}
 
 test:
-	./venv/bin/ptw CHANGEME-test-package-names
+	./venv/bin/ptw resource_catalogue_fastapi
 
 testonce:
 	./venv/bin/pytest
