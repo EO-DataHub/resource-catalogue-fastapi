@@ -7,7 +7,9 @@
 annotated-types==0.7.0
     # via pydantic
 anyio==4.6.0
-    # via starlette
+    # via
+    #   httpx
+    #   starlette
 black==24.8.0
     # via resource-catalogue-fastapi (pyproject.toml)
 boto3==1.35.38
@@ -20,6 +22,8 @@ build==1.2.2
     # via pip-tools
 certifi==2024.8.30
     # via
+    #   httpcore
+    #   httpx
     #   pulsar-client
     #   requests
 cfgv==3.4.0
@@ -40,12 +44,19 @@ fastapi==0.115.0
 filelock==3.16.1
     # via virtualenv
 h11==0.14.0
-    # via uvicorn
+    # via
+    #   httpcore
+    #   uvicorn
+httpcore==1.0.6
+    # via httpx
+httpx==0.27.2
+    # via resource-catalogue-fastapi (pyproject.toml)
 identify==2.6.1
     # via pre-commit
 idna==3.10
     # via
     #   anyio
+    #   httpx
     #   requests
 iniconfig==2.0.0
     # via pytest
@@ -114,7 +125,9 @@ s3transfer==0.10.3
 six==1.16.0
     # via python-dateutil
 sniffio==1.3.1
-    # via anyio
+    # via
+    #   anyio
+    #   httpx
 starlette==0.38.6
     # via fastapi
 typing-extensions==4.12.2
