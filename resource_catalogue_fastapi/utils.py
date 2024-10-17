@@ -1,6 +1,8 @@
 import logging
+import os
 import time
 import urllib.request
+from distutils.util import strtobool
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -95,7 +97,8 @@ def get_workspace(request: Request) -> str:
 
 
 def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
-    rate_limit(workspace)
+    if strtobool(os.getenv("ENABLE_RATE_LIMIT", "false")):
+        rate_limit(workspace)
 
 
 def upload_file_s3(body: str, bucket: str, key: str):

@@ -48,9 +48,7 @@ RC_FASTAPI_ROOT_PATH = os.getenv("RC_FASTAPI_ROOT_PATH", "/api/catalogue/manage"
 # Pulsar client setup
 PULSAR_URL = os.environ.get("PULSAR_URL", "pulsar://pulsar-broker.pulsar:6650")
 pulsar_client = PulsarClient(PULSAR_URL)
-producer = pulsar_client.create_producer(
-    topic="harvested", producer_name="resource_catalogue_fastapi"
-)
+producer = None
 
 
 app = FastAPI(
@@ -68,6 +66,16 @@ static_filepath = os.getenv("STATIC_FILE_PATH", "static")
 
 # Mount static files with STAC FastApi
 app.mount("/static", StaticFiles(directory=static_filepath), name="static")
+
+
+# Dependency function to get or create the producer
+def get_producer():
+    global producer
+    if producer is None:
+        producer = pulsar_client.create_producer(
+            topic="harvested", producer_name="resource_catalogue_fastapi"
+        )
+    return producer
 
 
 def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
@@ -107,6 +115,7 @@ async def create_item(
     workspace: str,
     request: ItemRequest,
     rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
+    producer=Depends(get_producer),  # noqa: B008
 ):
     """Endpoint to create a new item and collection within a workspace"""
 
@@ -134,6 +143,7 @@ async def delete_item(
     workspace: str,
     request: ItemRequest,
     rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
+    producer=Depends(get_producer),  # noqa: B008
 ):
     """Endpoint to delete an item in a workspace's collection"""
 
@@ -165,6 +175,7 @@ async def update_item(
     workspace: str,
     request: ItemRequest,
     rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
+    producer=Depends(get_producer),  # noqa: B008
 ):
     """Endpoint to update an item and collection within a workspace"""
 
