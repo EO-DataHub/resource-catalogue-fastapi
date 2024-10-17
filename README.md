@@ -1,6 +1,6 @@
-# UK EO Data Hub Platform: ADES-FastApi Component
+# UK EO Data Hub Platform: ResourceCatalogue-FastApi Component
 
-This component is the initial implementation of the User Account Service that sits in front of the ADES service and allows more refined interaction with the workflow runner within the EO Data Hub. This repository provides a FastApi application that makes calls to the ADES component, also containing middleware which authenticates the incoming requests using an OPA client. Access to workflows and jobs is only provided if the username of the requesting user matches that found in the URL request.
+This component is the initial implementation of an API to allow interaction with Stac-FastAPI within the EO Data Hub. This repository provides a FastApi application manages items within a user's workspace and sends Pulsar messages to ingest STAC items into the platform. It also contains middleware which authenticates the incoming requests using an OPA client. Access to a workspace is only provided if the username of the requesting user is authorised to access a workspace.
 
 Note swagger static files are available in the [swagger-ui](https://github.com/swagger-api/swagger-ui/tree/master/dist) repo.
 
@@ -12,10 +12,15 @@ This application uses a uvicorn server to run the FastApi application, you can i
 ```commandline
 uvicorn resource_catalogue_fastapi:app --reload
 ```
-This application also requires access an ADES service as well as an OPA client via URLs, which can be provided using the following environment variables:
+This application also requires access to an OPA client via URL, which can be provided using the following environment variable:
 ```commandline
 OPA_SERVICE_ENDPOINT
-ADES_SERVICE_ENDPOINT
+```
+Other environment variables which should be set in order to run the server correctly include:
+```commandline
+WORKSPACES_DOMAIN
+S3_BUCKET
+PULSAR_URL
 ```
 ## Getting started
 
