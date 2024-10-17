@@ -167,3 +167,4 @@ cython_debug/
 .vscode/
 
 .pre-commit-config.yaml
+.make-venv-installed
