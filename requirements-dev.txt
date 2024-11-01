@@ -6,19 +6,19 @@
 #
 annotated-types==0.7.0
     # via pydantic
-anyio==4.6.0
+anyio==4.6.2.post1
     # via
     #   httpx
     #   starlette
-black==24.8.0
+black==24.10.0
     # via resource-catalogue-fastapi (pyproject.toml)
-boto3==1.35.38
+boto3==1.35.53
     # via resource-catalogue-fastapi (pyproject.toml)
-botocore==1.35.38
+botocore==1.35.53
     # via
     #   boto3
     #   s3transfer
-build==1.2.2
+build==1.2.2.post1
     # via pip-tools
 certifi==2024.8.30
     # via
@@ -35,11 +35,11 @@ click==8.1.7
     #   black
     #   pip-tools
     #   uvicorn
-distlib==0.3.8
+distlib==0.3.9
     # via virtualenv
 execnet==2.1.1
     # via pytest-xdist
-fastapi==0.115.0
+fastapi==0.115.4
     # via resource-catalogue-fastapi (pyproject.toml)
 filelock==3.16.1
     # via virtualenv
@@ -85,7 +85,7 @@ platformdirs==4.3.6
     #   virtualenv
 pluggy==1.5.0
     # via pytest
-pre-commit==3.8.0
+pre-commit==4.0.1
     # via resource-catalogue-fastapi (pyproject.toml)
 pulsar-client==3.5.0
     # via resource-catalogue-fastapi (pyproject.toml)
@@ -118,7 +118,7 @@ pyyaml==6.0.2
     #   resource-catalogue-fastapi (pyproject.toml)
 requests==2.32.3
     # via resource-catalogue-fastapi (pyproject.toml)
-ruff==0.6.8
+ruff==0.7.1
     # via resource-catalogue-fastapi (pyproject.toml)
 s3transfer==0.10.3
     # via boto3
@@ -128,7 +128,7 @@ sniffio==1.3.1
     # via
     #   anyio
     #   httpx
-starlette==0.38.6
+starlette==0.41.2
     # via fastapi
 typing-extensions==4.12.2
     # via
@@ -139,9 +139,9 @@ urllib3==2.2.3
     # via
     #   botocore
     #   requests
-uvicorn==0.31.1
+uvicorn==0.32.0
     # via resource-catalogue-fastapi (pyproject.toml)
-virtualenv==20.26.6
+virtualenv==20.27.1
     # via pre-commit
 watchdog==5.0.3
     # via pytest-watcher
