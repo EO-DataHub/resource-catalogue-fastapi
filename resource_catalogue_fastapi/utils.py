@@ -14,6 +14,8 @@ from fastapi import Depends, HTTPException, Request
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
+ADES_URL = os.getenv("ADES_URL")
+
 
 def get_path_params(request: Request):
     logger.debug("CALCULATING PATH PARAMETERS")
@@ -101,14 +103,27 @@ def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
         rate_limit(workspace)
 
 
-def upload_file_s3(body: str, bucket: str, key: str):
-    """Upload data to an S3 bucket."""
+def upload_file_s3(body: str, bucket: str, key: str) -> bool:
+    """Upload data to an S3 bucket. Returns a bool indicating whether the file existed previously"""
+    s3_client = boto3.client("s3")
+    file_existed = False
+
     try:
-        s3_client = boto3.client("s3")
+        # Check if the file already exists
+        s3_client.head_object(Bucket=bucket, Key=key)
+        file_existed = True
+    except ClientError as e:
+        # If a 404 error is raised, the file does not exist
+        if e.response["Error"]["Code"] != "404":
+            logging.error(f"Error checking if file exists: {e}")
+            raise
+    try:
         s3_client.put_object(Body=body, Bucket=bucket, Key=key)
     except ClientError as e:
         logging.error(f"File upload failed: {e}")
         raise
+
+    return file_existed
 
 
 def delete_file_s3(bucket: str, key: str):
@@ -153,3 +168,53 @@ def get_nested_files_from_url(url: str) -> list:
     # Add collection to the start of the list so it is uploaded first
     files_to_add.insert(0, f"{base_url}{collection_path}")
     return files_to_add
+
+
+def update_stac_order_status(stac_item: dict, item_id: str, order_status: str):
+    """Update the STAC item with the order status using the STAC Order extension"""
+    # Update or add fields relating to the order
+    if "properties" not in stac_item:
+        stac_item["properties"] = {}
+
+    if item_id is not None:
+        stac_item["properties"]["order.id"] = item_id
+    stac_item["properties"]["order.status"] = order_status
+
+    # Update or add the STAC extension if not already present
+    order_extension_url = "https://stac-extensions.github.io/order/v1.1.0/schema.json"
+    if "stac_extensions" not in stac_item:
+        stac_item["stac_extensions"] = []
+
+    if order_extension_url not in stac_item["stac_extensions"]:
+        stac_item["stac_extensions"].append(order_extension_url)
+
+
+def execute_order_workflow(
+    provider_workspace: str,
+    user_workspace: str,
+    workflow_name: str,
+    authorization: str,
+    stac_key: str,
+    workspace_bucket: str,
+):
+    """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
+
+    url = f"{ADES_URL}/{provider_workspace}/ogc-api/processes/{workflow_name}/execution"
+    headers = {
+        "Authorization": authorization,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Prefer": "respond-async",
+    }
+    logger.info(f"Executing workflow {workflow_name} for user {user_workspace}")
+    payload = {
+        "inputs": {
+            "workspace": user_workspace,
+            "stac_key": stac_key,
+            "workspace_bucket": workspace_bucket,
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    response.raise_for_status()
+    return response.json()
