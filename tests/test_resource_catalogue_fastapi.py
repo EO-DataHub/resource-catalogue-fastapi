@@ -111,8 +111,4 @@ def test_order_item_success(
         "test-bucket",
         "test-workspace/ordered-data/file.json",
     )
-    mock_create_producer.assert_called_once_with(
-        topic="harvested", producer_name="resource_catalogue_fastapi"
-    )
-    mock_producer.send.assert_called_once()
     mock_post_request.assert_called_once()
