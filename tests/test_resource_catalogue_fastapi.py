@@ -96,7 +96,7 @@ def test_order_item_success(
     mock_post_request.return_value = mock_response
 
     # Define the request payload
-    payload = {"url": "http://example.com/file.json"}
+    payload = {"url": "http://example.com/file.json", "extra_data": {"purchase_environment": True}}
 
     # Send the request
     response = client.post("/catalogs/user-datasets/test-workspace/ordered-data", json=payload)
@@ -131,7 +131,7 @@ def test_order_item_failure(
     mock_post_request.return_value = mock_response
 
     # Define the request payload
-    payload = {"url": "http://example.com/file.json"}
+    payload = {"url": "http://example.com/file.json", "extra_data": {"purchase_environment": True}}
 
     # Send the request
     response = client.post("/catalogs/user-datasets/test-workspace/ordered-data", json=payload)
