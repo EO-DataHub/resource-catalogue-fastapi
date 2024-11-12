@@ -114,7 +114,9 @@ def upload_nested_files(
         logger.info(f"Adding url {url_to_add}")
         body = get_file_from_url(url_to_add)
 
-        workspace_key = f"{workspace}/{catalog_name}/{url_to_add.split('/', 9)[-1]}"
+        # Extract the path after the first catalog from the URL to create the S3 key
+        path_after_catalog = url_to_add.split("/", 9)[-1]
+        workspace_key = f"{workspace}/{catalog_name}/{path_after_catalog}"
         if not os.path.splitext(workspace_key)[1]:
             workspace_key += ".json"
 
@@ -180,7 +182,9 @@ async def delete_item(
     """Endpoint to delete an item in a workspace's collection"""
 
     url = request.url
-    workspace_key = f"{workspace}/saved-data/{url.split('/', 9)[-1]}"
+    # Extract the path after the first catalog from the URL to create the S3 key
+    path_after_catalog = url.split("/", 9)[-1]
+    workspace_key = f"{workspace}/saved-data/{path_after_catalog}"
     if not os.path.splitext(workspace_key)[1]:
         workspace_key += ".json"
 
