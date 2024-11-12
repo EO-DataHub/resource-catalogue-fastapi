@@ -283,10 +283,13 @@ async def order_item(
         "target": f"user-datasets/{workspace}",
     }
     try:
-        ades_response = execute_order_workflow(
-            "airbus", workspace, "airbus-sar-adaptor", authorization, stac_key, S3_BUCKET
-        )
-        logger.info(f"Response from ADES: {ades_response}")
+        if item_request.extra_data.get("purchase_environment", False):
+            ades_response = execute_order_workflow(
+                "airbus", workspace, "airbus-sar-adaptor", authorization, stac_key, S3_BUCKET
+            )
+            logger.info(f"Response from ADES: {ades_response}")
+        else:
+            logger.info("Skipping ADES execution for non-production environments")
     except Exception as e:
         logger.error(f"Error executing order workflow: {e}")
         upload_single_item(url, workspace, stac_key, OrderStatus.FAILED.value)
