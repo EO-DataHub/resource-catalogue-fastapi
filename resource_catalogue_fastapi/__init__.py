@@ -144,6 +144,27 @@ def upload_nested_files(
     return keys, ordered_item_key
 
 
+def upload_single_item(url: str, workspace: str, workspace_key: str, order_status: str):
+    """Uploads one item found at given URL to a workspace, updating the order status"""
+    body = get_file_from_url(url)
+    try:
+        json_body = json.loads(body)
+        update_stac_order_status(json_body, None, order_status)
+        body = json.dumps(json_body)
+    except Exception as e:
+        logger.error(f"Error parsing item {url} to order as STAC: {e}")
+        raise
+
+    logger.info(f"Uploading item to workspace {workspace} with key {workspace_key}")
+
+    # Upload item to S3
+    is_updated = upload_file_s3(body, S3_BUCKET, workspace_key)
+
+    logger.info("Item uploaded successfully")
+
+    return is_updated
+
+
 @app.post("/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
 async def create_item(
     workspace: str,
@@ -261,12 +282,19 @@ async def order_item(
         "source": workspace,
         "target": f"user-datasets/{workspace}",
     }
+    try:
+        ades_response = execute_order_workflow(
+            "airbus", workspace, "airbus-sar-adaptor", authorization, stac_key, S3_BUCKET
+        )
+        logger.info(f"Response from ADES: {ades_response}")
+    except Exception as e:
+        logger.error(f"Error executing order workflow: {e}")
+        upload_single_item(url, workspace, stac_key, OrderStatus.FAILED.value)
+        logger.info(f"Sending message to pulsar: {output_data}")
+        producer.send((json.dumps(output_data)).encode("utf-8"))
+        raise HTTPException(status_code=500, detail="Error executing order workflow") from e
+
     logger.info(f"Sending message to pulsar: {output_data}")
     producer.send((json.dumps(output_data)).encode("utf-8"))
-
-    ades_response = execute_order_workflow(
-        "airbus", workspace, "airbus-sar-adaptor", authorization, stac_key, S3_BUCKET
-    )
-    logger.info(f"Response from ADES: {ades_response}")
 
     return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
