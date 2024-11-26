@@ -30,7 +30,7 @@ def test_create_item_success(mock_create_producer, mock_get_file_from_url, mock_
     # Verify interactions with mocks
     mock_get_file_from_url.assert_called_once_with("http://example.com/file.json")
     mock_upload_file_s3.assert_called_once_with(
-        b"file content", "test-bucket", "test-workspace/saved-data/file.json"
+        b"file content", "test-bucket", "test-workspace/saved-data/file.json", False
     )
     mock_create_producer.assert_called_once_with(
         topic="harvested", producer_name="resource_catalogue_fastapi"
@@ -75,7 +75,7 @@ def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
     # Verify interactions with mocks
     mock_get_file_from_url.assert_called_once_with("http://example.com/file.json")
     mock_upload_file_s3.assert_called_once_with(
-        b"file content", "test-bucket", "test-workspace/saved-data/file.json"
+        b"file content", "test-bucket", "test-workspace/saved-data/file.json", False
     )
 
 
@@ -111,6 +111,7 @@ def test_order_item_success(
         '{"stac_item": "data", "properties": {"order.status": "pending"}, "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
         "test-bucket",
         "test-workspace/ordered-data/file.json",
+        True,
     )
     mock_post_request.assert_called_once()
 
@@ -149,6 +150,7 @@ def test_order_item_failure(
                 '{"stac_item": "data", "properties": {"order.status": "pending"}, "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
                 "test-workspace/ordered-data/file.json",
+                True,
             ),
             call().__bool__(),
             call(

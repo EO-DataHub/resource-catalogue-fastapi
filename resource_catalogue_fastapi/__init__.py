@@ -111,6 +111,7 @@ def upload_nested_files(
     keys = {"added_keys": [], "updated_keys": []}
     ordered_item_key = None
     for url_to_add in files_to_add:
+        error_on_exist = False
         logger.info(f"Adding url {url_to_add}")
         body = get_file_from_url(url_to_add)
 
@@ -129,11 +130,13 @@ def upload_nested_files(
             except Exception as e:
                 logger.error(f"Error parsing item {url} to order as STAC: {e}")
                 raise
+            # If the item is being ordered, prevent a duplicate order by erroring if it exists
+            error_on_exist = True
 
         logger.info(f"Uploading item to workspace {workspace} with key {workspace_key}")
 
         # Upload item to S3
-        is_updated = upload_file_s3(body, S3_BUCKET, workspace_key)
+        is_updated = upload_file_s3(body, S3_BUCKET, workspace_key, error_on_exist)
 
         logger.info("Item uploaded successfully")
 
@@ -285,7 +288,13 @@ async def order_item(
     try:
         if item_request.extra_data.get("purchase_environment", False):
             ades_response = execute_order_workflow(
-                "airbus", workspace, "airbus-sar-adaptor", authorization, stac_key, S3_BUCKET
+                "airbus",
+                workspace,
+                "airbus-sar-adaptor",
+                authorization,
+                stac_key,
+                S3_BUCKET,
+                WORKSPACES_DOMAIN,
             )
             logger.info(f"Response from ADES: {ades_response}")
         else:
