@@ -259,7 +259,7 @@ async def update_item(
 
 
 @app.post(
-    "/catalogs/user-datasets/{workspace}/ordered-data", dependencies=[Depends(opa_dependency)]
+    "/catalogs/user-datasets/{workspace}/commercial-data", dependencies=[Depends(opa_dependency)]
 )
 async def order_item(
     request: Request,
@@ -273,7 +273,9 @@ async def order_item(
     authorization = request.headers.get("Authorization")
 
     url = item_request.url
-    keys, stac_key = upload_nested_files(url, workspace, "ordered-data", OrderStatus.PENDING.value)
+    keys, stac_key = upload_nested_files(
+        url, workspace, "commercial-data", OrderStatus.PENDING.value
+    )
 
     output_data = {
         "id": f"{workspace}/order_item",
