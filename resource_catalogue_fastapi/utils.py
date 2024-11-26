@@ -117,9 +117,9 @@ def upload_file_s3(body: str, bucket: str, key: str, error_on_exist: bool = Fals
         if e.response["Error"]["Code"] != "404":
             logging.error(f"Error checking if file exists: {e}")
             raise
-        if error_on_exist:
-            logging.error(f"File already exists: {key}")
-            raise
+    if error_on_exist and file_existed:
+        logging.error(f"File already exists: {key}")
+        raise FileExistsError(f"File already exists: {key}")
     try:
         s3_client.put_object(Body=body, Bucket=bucket, Key=key)
     except ClientError as e:
