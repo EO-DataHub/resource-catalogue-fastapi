@@ -216,7 +216,7 @@ def execute_order_workflow(
             "workspace": user_workspace,
             "stac_key": stac_key,
             "workspace_bucket": workspace_bucket,
-            "workspaces_domain": workspaces_domain,
+            "workspace_domain": workspaces_domain,
             "env": "prod",
         }
     }
