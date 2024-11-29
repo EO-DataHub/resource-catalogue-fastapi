@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.3 (2024-11-12)
+## v0.1.3 (2024-11-29)
 
 Updated ordering endpoint to latest version of SAR adaptor workflow:
 - Ordered data moved to commercial-data subfolder
