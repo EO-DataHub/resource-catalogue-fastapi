@@ -99,7 +99,7 @@ def test_order_item_success(
     payload = {"url": "http://example.com/file.json", "extra_data": {"purchase_environment": True}}
 
     # Send the request
-    response = client.post("/catalogs/user-datasets/test-workspace/ordered-data", json=payload)
+    response = client.post("/catalogs/user-datasets/test-workspace/commercial-data", json=payload)
 
     # Assertions
     assert response.status_code == 200
@@ -110,7 +110,7 @@ def test_order_item_success(
     mock_upload_file_s3.assert_called_once_with(
         '{"stac_item": "data", "properties": {"order.status": "pending"}, "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
         "test-bucket",
-        "test-workspace/ordered-data/file.json",
+        "test-workspace/commercial-data/file.json",
         True,
     )
     mock_post_request.assert_called_once()
@@ -135,7 +135,7 @@ def test_order_item_failure(
     payload = {"url": "http://example.com/file.json", "extra_data": {"purchase_environment": True}}
 
     # Send the request
-    response = client.post("/catalogs/user-datasets/test-workspace/ordered-data", json=payload)
+    response = client.post("/catalogs/user-datasets/test-workspace/commercial-data", json=payload)
 
     # Assertions
     assert response.status_code == 500
@@ -149,14 +149,14 @@ def test_order_item_failure(
             call(
                 '{"stac_item": "data", "properties": {"order.status": "pending"}, "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
-                "test-workspace/ordered-data/file.json",
+                "test-workspace/commercial-data/file.json",
                 True,
             ),
             call().__bool__(),
             call(
                 '{"stac_item": "data", "properties": {"order.status": "failed"}, "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
-                "test-workspace/ordered-data/file.json",
+                "test-workspace/commercial-data/file.json",
             ),
         ]
     )
