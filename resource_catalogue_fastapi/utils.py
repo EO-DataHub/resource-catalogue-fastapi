@@ -222,7 +222,6 @@ def execute_order_workflow(
     }
 
     logger.info(f"Sending request to {url} with payload: {payload}")
-    logger.info(f"Headers: {headers}")
 
     response = requests.post(url, headers=headers, json=payload)
     response.raise_for_status()
