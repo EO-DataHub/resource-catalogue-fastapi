@@ -328,7 +328,7 @@ async def get_thumbnail(collection: str, item: str):
         item_data = item_response.json()
 
         # TODO: change to external thumbnail link after testing
-        thumbnail_link = item_data.get("assets").get("thumbnail")
+        thumbnail_link = item_data.get("assets", {}).get("thumbnail", {}).get("href")
         if not thumbnail_link:
             raise HTTPException(status_code=404, detail="External thumbnail link not found in item")
 
