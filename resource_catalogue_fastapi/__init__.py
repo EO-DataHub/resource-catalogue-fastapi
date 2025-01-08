@@ -5,8 +5,9 @@ from distutils.util import strtobool
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+import requests
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
@@ -15,6 +16,7 @@ from .utils import (
     check_policy,
     delete_file_s3,
     execute_order_workflow,
+    generate_airbus_access_token,
     get_file_from_url,
     get_nested_files_from_url,
     get_path_params,
@@ -34,6 +36,8 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 # Domain for workspaces, used for OPA policy check
 WORKSPACES_DOMAIN = os.getenv("WORKSPACES_DOMAIN", "workspaces.dev.eodhp.eco-ke-staging.com")
+
+EODH_DOMAIN = os.getenv("EODH_DOMAIN", "dev.eodatahub.org.uk")
 
 # OPA service endpoint
 OPA_SERVICE_ENDPOINT = os.getenv(
@@ -312,3 +316,30 @@ async def order_item(
     producer.send((json.dumps(output_data)).encode("utf-8"))
 
     return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
+
+
+@app.get("/catalogs/user-datasets/collections/{collection}/items/{item}/thumbnail")
+async def get_thumbnail(collection: str, item: str):
+    """Endpoint to get the thumbnail of an item"""
+    try:
+        item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
+        item_response = requests.get(item_url)
+        item_response.raise_for_status()
+        item_data = item_response.json()
+
+        thumbnail_link = item_data.get("assets").get("external_thumbnail")
+        if not thumbnail_link:
+            raise HTTPException(status_code=404, detail="External thumbnail link not found in item")
+
+        access_token = generate_airbus_access_token("prod")
+        headers = {"Authorization": f"Bearer {access_token}"}
+        thumbnail_response = requests.get(thumbnail_link, headers=headers)
+        thumbnail_response.raise_for_status()
+
+        return Response(
+            content=thumbnail_response.content,
+            media_type=thumbnail_response.headers.get("Content-Type"),
+        )
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
