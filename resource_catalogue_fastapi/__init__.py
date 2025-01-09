@@ -51,7 +51,7 @@ ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "false"
 S3_BUCKET = os.getenv("S3_BUCKET", "test-bucket")
 
 # Root path for FastAPI
-RC_FASTAPI_ROOT_PATH = os.getenv("RC_FASTAPI_ROOT_PATH", "/api/catalogue/manage")
+RC_FASTAPI_ROOT_PATH = os.getenv("RC_FASTAPI_ROOT_PATH", "/api/catalogue")
 
 # Pulsar client setup
 PULSAR_URL = os.environ.get("PULSAR_URL", "pulsar://pulsar-broker.pulsar:6650")
@@ -172,7 +172,7 @@ def upload_single_item(url: str, workspace: str, workspace_key: str, order_statu
     return is_updated
 
 
-@app.post("/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.post("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
 async def create_item(
     workspace: str,
     request: ItemRequest,
@@ -200,7 +200,7 @@ async def create_item(
     return JSONResponse(content={"message": "Item created successfully"}, status_code=200)
 
 
-@app.delete("/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.delete("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
 async def delete_item(
     workspace: str,
     request: ItemRequest,
@@ -234,7 +234,7 @@ async def delete_item(
     return JSONResponse(content={"message": "Item deleted successfully"}, status_code=200)
 
 
-@app.put("/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.put("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
 async def update_item(
     workspace: str,
     request: ItemRequest,
@@ -263,7 +263,8 @@ async def update_item(
 
 
 @app.post(
-    "/catalogs/user-datasets/{workspace}/commercial-data", dependencies=[Depends(opa_dependency)]
+    "/manage/catalogs/user-datasets/{workspace}/commercial-data",
+    dependencies=[Depends(opa_dependency)],
 )
 async def order_item(
     request: Request,
@@ -318,7 +319,7 @@ async def order_item(
     return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
 
 
-@app.get("/catalogs/user-datasets/collections/{collection}/items/{item}/thumbnail")
+@app.get("/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail")
 async def get_thumbnail(collection: str, item: str):
     """Endpoint to get the thumbnail of an item"""
     try:
