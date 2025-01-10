@@ -67,6 +67,7 @@ app = FastAPI(
     ),
     version="0.1.0",
     root_path=RC_FASTAPI_ROOT_PATH,
+    docs_url=RC_FASTAPI_ROOT_PATH + "/manage/docs",
 )
 
 # Define static file path
@@ -319,6 +320,7 @@ async def order_item(
     return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
 
 
+# airbus_pneo_dataACQ_PNEO3_05300415120321
 @app.get("/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail")
 async def get_thumbnail(collection: str, item: str):
     """Endpoint to get the thumbnail of an item"""
