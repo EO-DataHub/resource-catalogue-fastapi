@@ -67,7 +67,7 @@ app = FastAPI(
     ),
     version="0.1.0",
     root_path=RC_FASTAPI_ROOT_PATH,
-    docs_url=RC_FASTAPI_ROOT_PATH + "/manage/docs",
+    docs_url="/manage/docs",
 )
 
 # Define static file path
@@ -326,19 +326,22 @@ async def get_thumbnail(collection: str, item: str):
     """Endpoint to get the thumbnail of an item"""
     try:
         item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
+        logger.info(f"Fetching item data from {item_url}")
         item_response = requests.get(item_url)
         item_response.raise_for_status()
         item_data = item_response.json()
-
-        # TODO: change to external thumbnail link after testing
-        thumbnail_link = item_data.get("assets", {}).get("thumbnail", {}).get("href")
+        logger.info(f"Retrieved item data from {item_url}")
+        thumbnail_link = item_data.get("assets", {}).get("external_thumbnail", {}).get("href")
         if not thumbnail_link:
             raise HTTPException(status_code=404, detail="External thumbnail link not found in item")
+        logger.info(f"Fetching thumbnail from {thumbnail_link}")
 
         access_token = generate_airbus_access_token("prod")
+        logger.info("Generated access token for Airbus API")
         headers = {"Authorization": f"Bearer {access_token}"}
         thumbnail_response = requests.get(thumbnail_link, headers=headers)
         thumbnail_response.raise_for_status()
+        logger.info("Thumbnail retrieved successfully")
 
         return Response(
             content=thumbnail_response.content,
