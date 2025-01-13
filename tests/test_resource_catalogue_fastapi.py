@@ -168,3 +168,54 @@ def test_order_item_failure(
     )
     assert mock_upload_file_s3.call_count == 2
     mock_post_request.assert_called_once()
+
+
+@patch("resource_catalogue_fastapi.requests.get")
+@patch("resource_catalogue_fastapi.generate_airbus_access_token")
+def test_fetch_airbus_asset_success(mock_generate_token, mock_requests_get):
+    mock_generate_token.return_value = "mocked_access_token"
+    mock_item_response = MagicMock()
+    mock_item_response.json.return_value = {
+        "assets": {"external_thumbnail": {"href": "https://example.com/thumbnail"}}
+    }
+    mock_item_response.raise_for_status = MagicMock()
+    mock_requests_get.side_effect = [
+        mock_item_response,
+        MagicMock(content=b"image data", headers={"Content-Type": "image/jpeg"}),
+    ]
+
+    response = client.get(
+        "/stac/catalogs/supported-datasets/airbus/collections/collection/items/item/thumbnail"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["Content-Type"] == "image/jpeg"
+    assert response.content == b"image data"
+
+    # Verify interactions with mocks
+    mock_generate_token.assert_called_once_with("prod")
+    mock_requests_get.assert_any_call(
+        "https://example.com/thumbnail", headers={"Authorization": "Bearer mocked_access_token"}
+    )
+
+
+@patch("resource_catalogue_fastapi.requests.get")
+@patch("resource_catalogue_fastapi.generate_airbus_access_token")
+def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
+    mock_generate_token.return_value = "mocked_access_token"
+    mock_item_response = MagicMock()
+    mock_item_response.json.return_value = {"assets": {}}
+    mock_item_response.raise_for_status = MagicMock()
+    mock_requests_get.side_effect = [mock_item_response]
+
+    response = client.get(
+        "/stac/catalogs/supported-datasets/airbus/collections/collection/items/item/thumbnail"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "External thumbnail link not found in item"}
+
+    # Verify interactions with mocks
+    mock_requests_get.assert_called_once_with(
+        "https://dev.eodatahub.org.uk/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/collection/items/item"
+    )
