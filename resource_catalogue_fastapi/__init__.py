@@ -333,7 +333,8 @@ async def order_item(
     return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
 
 
-def fetch_airbus_asset(collection, item, asset_name):
+def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
+    """Fetch an asset via an external link in an Airbus item, using a generated access token"""
     item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
     logger.info(f"Fetching item data from {item_url}")
     item_response = requests.get(item_url)
