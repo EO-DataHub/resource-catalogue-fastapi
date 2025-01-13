@@ -21,7 +21,7 @@ def test_create_item_success(mock_create_producer, mock_get_file_from_url, mock_
     payload = {"url": "http://example.com/file.json"}
 
     # Send the request
-    response = client.post("/catalogs/user-datasets/test-workspace", json=payload)
+    response = client.post("/manage/catalogs/user-datasets/test-workspace", json=payload)
 
     # Assertions
     assert response.status_code == 200
@@ -44,7 +44,9 @@ def test_delete_item_success(mock_delete_file_s3):
     payload = {"url": "http://example.com/file.json"}
 
     # Send the request
-    response = client.request("DELETE", "/catalogs/user-datasets/test-workspace", json=payload)
+    response = client.request(
+        "DELETE", "/manage/catalogs/user-datasets/test-workspace", json=payload
+    )
 
     # Assertions
     assert response.status_code == 200
@@ -66,7 +68,7 @@ def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
     payload = {"url": "http://example.com/file.json"}
 
     # Send the request
-    response = client.put("/catalogs/user-datasets/test-workspace", json=payload)
+    response = client.put("/manage/catalogs/user-datasets/test-workspace", json=payload)
 
     # Assertions
     assert response.status_code == 200
@@ -99,7 +101,9 @@ def test_order_item_success(
     payload = {"url": "http://example.com/file.json", "extra_data": {"purchase_environment": True}}
 
     # Send the request
-    response = client.post("/catalogs/user-datasets/test-workspace/commercial-data", json=payload)
+    response = client.post(
+        "/manage/catalogs/user-datasets/test-workspace/commercial-data", json=payload
+    )
 
     # Assertions
     assert response.status_code == 200
@@ -135,7 +139,9 @@ def test_order_item_failure(
     payload = {"url": "http://example.com/file.json", "extra_data": {"purchase_environment": True}}
 
     # Send the request
-    response = client.post("/catalogs/user-datasets/test-workspace/commercial-data", json=payload)
+    response = client.post(
+        "/manage/catalogs/user-datasets/test-workspace/commercial-data", json=payload
+    )
 
     # Assertions
     assert response.status_code == 500

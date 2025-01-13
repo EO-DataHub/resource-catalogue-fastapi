@@ -20,6 +20,7 @@ from .utils import (
     get_file_from_url,
     get_nested_files_from_url,
     get_path_params,
+    get_user_details,
     rate_limiter_dependency,
     update_stac_order_status,
     upload_file_s3,
@@ -68,6 +69,7 @@ app = FastAPI(
     version="0.1.0",
     root_path=RC_FASTAPI_ROOT_PATH,
     docs_url="/manage/docs",
+    openapi_url="/manage/openapi.json",
 )
 
 # Define static file path
@@ -91,6 +93,17 @@ def opa_dependency(request: Request, path_params: dict = Depends(get_path_params
     if ENABLE_OPA_POLICY_CHECK:
         if not check_policy(request, path_params, OPA_SERVICE_ENDPOINT, WORKSPACES_DOMAIN):
             raise HTTPException(status_code=403, detail="Access denied")
+
+
+def ensure_user_logged_in(request: Request):
+    if ENABLE_OPA_POLICY_CHECK:
+        username, _ = get_user_details(request)
+
+        # Add values for logs
+        logger.info("Logged in as user: %s", username)
+
+        if not username:
+            raise HTTPException(status_code=404)
 
 
 class OrderStatus(Enum):
@@ -320,33 +333,52 @@ async def order_item(
     return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
 
 
-# airbus_pneo_dataACQ_PNEO3_05300415120321
-@app.get("/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail")
+def fetch_airbus_asset(collection, item, asset_name):
+    item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
+    logger.info(f"Fetching item data from {item_url}")
+    item_response = requests.get(item_url)
+    item_response.raise_for_status()
+    item_data = item_response.json()
+    logger.info(f"Retrieved item data from {item_url}")
+    asset_link = item_data.get("assets", {}).get(f"external_{asset_name}", {}).get("href")
+    if not asset_link:
+        raise HTTPException(status_code=404, detail=f"External {asset_name} link not found in item")
+    logger.info(f"Fetching {asset_name} from {asset_link}")
+
+    access_token = generate_airbus_access_token("prod")
+    logger.info("Generated access token for Airbus API")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    asset_response = requests.get(asset_link, headers=headers)
+    asset_response.raise_for_status()
+    logger.info(f"{asset_name} retrieved successfully")
+
+    return Response(
+        content=asset_response.content,
+        media_type=asset_response.headers.get("Content-Type"),
+    )
+
+
+@app.get(
+    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
 async def get_thumbnail(collection: str, item: str):
     """Endpoint to get the thumbnail of an item"""
     try:
-        item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
-        logger.info(f"Fetching item data from {item_url}")
-        item_response = requests.get(item_url)
-        item_response.raise_for_status()
-        item_data = item_response.json()
-        logger.info(f"Retrieved item data from {item_url}")
-        thumbnail_link = item_data.get("assets", {}).get("external_thumbnail", {}).get("href")
-        if not thumbnail_link:
-            raise HTTPException(status_code=404, detail="External thumbnail link not found in item")
-        logger.info(f"Fetching thumbnail from {thumbnail_link}")
+        return fetch_airbus_asset(collection, item, "thumbnail")
 
-        access_token = generate_airbus_access_token("prod")
-        logger.info("Generated access token for Airbus API")
-        headers = {"Authorization": f"Bearer {access_token}"}
-        thumbnail_response = requests.get(thumbnail_link, headers=headers)
-        thumbnail_response.raise_for_status()
-        logger.info("Thumbnail retrieved successfully")
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
-        return Response(
-            content=thumbnail_response.content,
-            media_type=thumbnail_response.headers.get("Content-Type"),
-        )
+
+@app.get(
+    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/quicklook",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+async def get_quicklook(collection: str, item: str):
+    """Endpoint to get the quicklook of an item"""
+    try:
+        return fetch_airbus_asset(collection, item, "quicklook")
 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
