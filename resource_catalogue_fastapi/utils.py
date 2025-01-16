@@ -15,6 +15,7 @@ from fastapi import Depends, HTTPException, Request
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ADES_URL = os.getenv("ADES_URL")
+AIRBUS_API_KEY = os.getenv("AIRBUS_API_KEY")
 
 
 def get_path_params(request: Request):
@@ -226,3 +227,25 @@ def execute_order_workflow(
     response = requests.post(url, headers=headers, json=payload)
     response.raise_for_status()
     return response.json()
+
+
+def generate_airbus_access_token(env: str = "dev") -> str:
+    """Generate access token for Airbus API"""
+    if env == "prod":
+        url = "https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token"
+    else:
+        url = "https://authenticate-int.idp.private.geoapi-airbusds.com/auth/realms/IDP/protocol/openid-connect/token"
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+
+    data = [
+        ("apikey", AIRBUS_API_KEY),
+        ("grant_type", "api_key"),
+        ("client_id", "IDP"),
+    ]
+
+    response = requests.post(url, headers=headers, data=data)
+
+    return response.json().get("access_token")

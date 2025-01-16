@@ -5,8 +5,9 @@ from distutils.util import strtobool
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+import requests
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
@@ -15,9 +16,11 @@ from .utils import (
     check_policy,
     delete_file_s3,
     execute_order_workflow,
+    generate_airbus_access_token,
     get_file_from_url,
     get_nested_files_from_url,
     get_path_params,
+    get_user_details,
     rate_limiter_dependency,
     update_stac_order_status,
     upload_file_s3,
@@ -35,6 +38,8 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 # Domain for workspaces, used for OPA policy check
 WORKSPACES_DOMAIN = os.getenv("WORKSPACES_DOMAIN", "workspaces.dev.eodhp.eco-ke-staging.com")
 
+EODH_DOMAIN = os.getenv("EODH_DOMAIN", "dev.eodatahub.org.uk")
+
 # OPA service endpoint
 OPA_SERVICE_ENDPOINT = os.getenv(
     "OPA_SERVICE_ENDPOINT", "http://opal-client.opal:8181/v1/data/workspaces/allow"
@@ -47,7 +52,7 @@ ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "false"
 S3_BUCKET = os.getenv("S3_BUCKET", "test-bucket")
 
 # Root path for FastAPI
-RC_FASTAPI_ROOT_PATH = os.getenv("RC_FASTAPI_ROOT_PATH", "/api/catalogue/manage")
+RC_FASTAPI_ROOT_PATH = os.getenv("RC_FASTAPI_ROOT_PATH", "/api/catalogue")
 
 # Pulsar client setup
 PULSAR_URL = os.environ.get("PULSAR_URL", "pulsar://pulsar-broker.pulsar:6650")
@@ -63,6 +68,8 @@ app = FastAPI(
     ),
     version="0.1.0",
     root_path=RC_FASTAPI_ROOT_PATH,
+    docs_url="/manage/docs",
+    openapi_url="/manage/openapi.json",
 )
 
 # Define static file path
@@ -86,6 +93,17 @@ def opa_dependency(request: Request, path_params: dict = Depends(get_path_params
     if ENABLE_OPA_POLICY_CHECK:
         if not check_policy(request, path_params, OPA_SERVICE_ENDPOINT, WORKSPACES_DOMAIN):
             raise HTTPException(status_code=403, detail="Access denied")
+
+
+def ensure_user_logged_in(request: Request):
+    if ENABLE_OPA_POLICY_CHECK:
+        username, _ = get_user_details(request)
+
+        # Add values for logs
+        logger.info("Logged in as user: %s", username)
+
+        if not username:
+            raise HTTPException(status_code=404)
 
 
 class OrderStatus(Enum):
@@ -168,7 +186,7 @@ def upload_single_item(url: str, workspace: str, workspace_key: str, order_statu
     return is_updated
 
 
-@app.post("/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.post("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
 async def create_item(
     workspace: str,
     request: ItemRequest,
@@ -196,7 +214,7 @@ async def create_item(
     return JSONResponse(content={"message": "Item created successfully"}, status_code=200)
 
 
-@app.delete("/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.delete("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
 async def delete_item(
     workspace: str,
     request: ItemRequest,
@@ -230,7 +248,7 @@ async def delete_item(
     return JSONResponse(content={"message": "Item deleted successfully"}, status_code=200)
 
 
-@app.put("/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.put("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
 async def update_item(
     workspace: str,
     request: ItemRequest,
@@ -259,7 +277,8 @@ async def update_item(
 
 
 @app.post(
-    "/catalogs/user-datasets/{workspace}/commercial-data", dependencies=[Depends(opa_dependency)]
+    "/manage/catalogs/user-datasets/{workspace}/commercial-data",
+    dependencies=[Depends(opa_dependency)],
 )
 async def order_item(
     request: Request,
@@ -312,3 +331,53 @@ async def order_item(
     producer.send((json.dumps(output_data)).encode("utf-8"))
 
     return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
+
+
+def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
+    """Fetch an asset via an external link in an Airbus item, using a generated access token"""
+    item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
+    logger.info(f"Fetching item data from {item_url}")
+    item_response = requests.get(item_url)
+    item_response.raise_for_status()
+    item_data = item_response.json()
+    asset_link = item_data.get("assets", {}).get(f"external_{asset_name}", {}).get("href")
+    if not asset_link:
+        raise HTTPException(status_code=404, detail=f"External {asset_name} link not found in item")
+    logger.info(f"Fetching {asset_name} from {asset_link}")
+
+    access_token = generate_airbus_access_token("prod")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    asset_response = requests.get(asset_link, headers=headers)
+    asset_response.raise_for_status()
+    logger.info(f"{asset_name} retrieved successfully")
+
+    return Response(
+        content=asset_response.content,
+        media_type=asset_response.headers.get("Content-Type"),
+    )
+
+
+@app.get(
+    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+async def get_thumbnail(collection: str, item: str):
+    """Endpoint to get the thumbnail of an item"""
+    try:
+        return fetch_airbus_asset(collection, item, "thumbnail")
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get(
+    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/quicklook",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+async def get_quicklook(collection: str, item: str):
+    """Endpoint to get the quicklook of an item"""
+    try:
+        return fetch_airbus_asset(collection, item, "quicklook")
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
