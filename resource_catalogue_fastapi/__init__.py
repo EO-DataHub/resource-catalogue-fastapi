@@ -139,7 +139,10 @@ def upload_nested_files(
 
         # Extract the path after the first catalog from the URL to create the S3 key
         path_after_catalog = url_to_add.split("/", 9)[-1]
-        collection_id = path_after_catalog.split("/collections/")[1].split("/items/")[0]
+        try:
+            collection_id = path_after_catalog.split("collections/")[1].split("/items/")[0]
+        except (IndexError, KeyError):
+            collection_id = None
         workspace_key = f"{workspace}/{catalog_name}/{path_after_catalog}"
         if not os.path.splitext(workspace_key)[1]:
             workspace_key += ".json"

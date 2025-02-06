@@ -155,7 +155,7 @@ def get_file_from_url(url: str, retries: int = 0) -> str:
 
 
 def get_nested_files_from_url(url: str) -> list:
-    """Obtain all nesteed files to upload to a workspace from a url"""
+    """Obtain all nested files to upload to a workspace from a url"""
     files_to_add = [url]
 
     parsed_url = urlparse(url)
