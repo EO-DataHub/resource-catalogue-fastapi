@@ -146,7 +146,6 @@ def test_order_item_failure(
     mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("Mocked error")
     mock_post_request.return_value = mock_response
 
-    # Define the request payload
     url = "http://example.com/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_sar_data/items/file.json"
     # Define the request payload
     payload = {"url": url, "product_bundle": "bundle"}
