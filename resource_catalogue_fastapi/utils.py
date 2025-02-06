@@ -198,9 +198,9 @@ def execute_order_workflow(
     user_workspace: str,
     workflow_name: str,
     authorization: str,
-    stac_key: str,
-    workspace_bucket: str,
-    workspaces_domain: str,
+    stac_uri: str,
+    commercial_data_bucket: str,
+    product_bundle: str,
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
@@ -215,10 +215,9 @@ def execute_order_workflow(
     payload = {
         "inputs": {
             "workspace": user_workspace,
-            "stac_key": stac_key,
-            "workspace_bucket": workspace_bucket,
-            "workspace_domain": workspaces_domain,
-            "env": "prod",
+            "commercial_data_bucket": commercial_data_bucket,
+            "product_bundle": product_bundle,
+            "stac_key": stac_uri,
         }
     }
 
