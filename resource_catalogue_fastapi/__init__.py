@@ -121,9 +121,13 @@ class ItemRequest(BaseModel):
     extra_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
+class OrderRequest(ItemRequest):
+    product_bundle: str
+
+
 def upload_nested_files(
     url: str, workspace: str, catalog_name: str = "saved-data", order_status: Optional[str] = None
-) -> Tuple[Dict[str, List[str]], Optional[str]]:
+) -> Tuple[Dict[str, List[str]], Optional[str], str]:
     """Upload a file along with any nested files to a workspace"""
     files_to_add = get_nested_files_from_url(url)
     keys = {"added_keys": [], "updated_keys": []}
@@ -135,6 +139,10 @@ def upload_nested_files(
 
         # Extract the path after the first catalog from the URL to create the S3 key
         path_after_catalog = url_to_add.split("/", 9)[-1]
+        try:
+            collection_id = path_after_catalog.split("collections/")[1].split("/items/")[0]
+        except (IndexError, KeyError):
+            collection_id = None
         workspace_key = f"{workspace}/{catalog_name}/{path_after_catalog}"
         if not os.path.splitext(workspace_key)[1]:
             workspace_key += ".json"
@@ -162,7 +170,7 @@ def upload_nested_files(
             keys["updated_keys"].append(workspace_key)
         else:
             keys["added_keys"].append(workspace_key)
-    return keys, ordered_item_key
+    return keys, ordered_item_key, collection_id
 
 
 def upload_single_item(url: str, workspace: str, workspace_key: str, order_status: str):
@@ -196,7 +204,7 @@ async def create_item(
     """Endpoint to create a new item and collection within a workspace"""
 
     url = request.url
-    keys, _ = upload_nested_files(url, workspace)
+    keys, _, _ = upload_nested_files(url, workspace)
 
     output_data = {
         "id": f"{workspace}/create_item",
@@ -258,7 +266,7 @@ async def update_item(
     """Endpoint to update an item and collection within a workspace"""
 
     url = request.url
-    keys, _ = upload_nested_files(url, workspace)
+    keys, _, _ = upload_nested_files(url, workspace)
 
     output_data = {
         "id": f"{workspace}/update_item",
@@ -283,7 +291,7 @@ async def update_item(
 async def order_item(
     request: Request,
     workspace: str,
-    item_request: ItemRequest,
+    order_request: OrderRequest,
     producer=Depends(get_producer),  # noqa: B008
 ):
     """Endpoint to create a new item and collection within a workspace with an order status, and
@@ -291,8 +299,8 @@ async def order_item(
 
     authorization = request.headers.get("Authorization")
 
-    url = item_request.url
-    keys, stac_key = upload_nested_files(
+    url = order_request.url
+    keys, stac_key, collection_id = upload_nested_files(
         url, workspace, "commercial-data", OrderStatus.PENDING.value
     )
 
@@ -306,20 +314,29 @@ async def order_item(
         "source": workspace,
         "target": f"user-datasets/{workspace}",
     }
-    try:
-        if item_request.extra_data.get("purchase_environment", False):
-            ades_response = execute_order_workflow(
-                "airbus",
-                workspace,
-                "airbus-sar-adaptor",
-                authorization,
-                stac_key,
-                S3_BUCKET,
-                WORKSPACES_DOMAIN,
-            )
-            logger.info(f"Response from ADES: {ades_response}")
+    if collection_id.startswith("airbus"):
+        catalog_name = "airbus"
+        commercial_data_bucket = "commercial-data-airbus"
+        if collection_id == "airbus_sar_data":
+            adaptor_name = "airbus-sar-adaptor"
         else:
-            logger.info("Skipping ADES execution for non-production environments")
+            adaptor_name = "airbus-optical-adaptor"
+    else:
+        catalog_name = "planet"
+        adaptor_name = "planet-adaptor"
+        commercial_data_bucket = S3_BUCKET
+
+    try:
+        ades_response = execute_order_workflow(
+            catalog_name,
+            workspace,
+            adaptor_name,
+            authorization,
+            f"s3://{S3_BUCKET}/{stac_key}",
+            commercial_data_bucket,
+            order_request.product_bundle,
+        )
+        logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
         logger.error(f"Error executing order workflow: {e}")
         upload_single_item(url, workspace, stac_key, OrderStatus.FAILED.value)
