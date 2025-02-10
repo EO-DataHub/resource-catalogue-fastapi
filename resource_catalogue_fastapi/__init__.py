@@ -3,10 +3,10 @@ import logging
 import os
 from distutils.util import strtobool
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 import requests
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pulsar import Client as PulsarClient
@@ -287,15 +287,34 @@ async def update_item(
 @app.post(
     "/manage/catalogs/user-datasets/{workspace}/commercial-data",
     dependencies=[Depends(opa_dependency)],
+    responses={
+        200: {
+            "content": {"application/json": {"example": {"message": "Item ordered successfully"}}}
+        }
+    },
 )
 async def order_item(
     request: Request,
     workspace: str,
-    order_request: OrderRequest,
+    order_request: Annotated[
+        OrderRequest,
+        Body(
+            examples=[
+                {
+                    "url": f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_pneo_data/items/ACQ_PNEO3_05300415120321",
+                    "product_bundle": "general_use",
+                },
+            ]
+        ),
+    ],
     producer=Depends(get_producer),  # noqa: B008
 ):
-    """Endpoint to create a new item and collection within a workspace with an order status, and
-    execute a workflow to order the item"""
+    """Create a new item and collection within a workspace with an order status, and
+    execute a workflow to order the item from a commercial data provider.
+
+    * url: The EODHP STAC item URL to order
+    * product_bundle: The product bundle to order from the commercial data provider
+    * extra_data: (Optional) A placeholder for future data options to include in the item"""
 
     authorization = request.headers.get("Authorization")
 
