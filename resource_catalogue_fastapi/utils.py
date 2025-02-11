@@ -33,12 +33,14 @@ def get_user_details(request: Request) -> tuple:
     """Get user details from the request"""
     token = request.headers.get("authorization", "")
     stripped_token = token.replace("Bearer ", "")
+    logger.debug(f"Token: {stripped_token}")
     if stripped_token:
         credentials = jwt.decode(
             stripped_token,
             options={"verify_signature": False},
             algorithms=["HS256"],
         )
+        logger.debug(f"Credentials: {credentials}")
         username = credentials.get("preferred_username", "")
         roles = credentials.get("realm_access", {}).get("roles", [])
 
