@@ -29,6 +29,14 @@ def opa_request(input_data: dict, opa_service_endpoint: str) -> requests.Respons
     return requests.post(opa_service_endpoint, json=input_data)
 
 
+def workspaces_api_request(headers: dict, workspace: str, user: str) -> requests.Response:
+    """Send a request to the workspaces API"""
+    workspaces_api_url = (
+        f"https://{os.getenv('EODH_DOMAIN')}/api/workspaces/{workspace}/users/{user}"
+    )
+    return requests.get(workspaces_api_url, headers=headers)
+
+
 def get_user_details(request: Request) -> tuple:
     """Get user details from the request"""
     token = request.headers.get("authorization", "")
@@ -66,18 +74,9 @@ def check_policy(
     if not (workspace := path_params.get("workspace")):
         return False
 
-    input_data = {
-        "input": {
-            "roles": roles,
-            "host": f"{workspace}.{workspaces_domain}",
-            "username": username,
-            "method": request.method,
-        }
-    }
-
-    response = opa_request(input_data, opa_service_endpoint)
-    logger.debug(f"OPA response: {response.json()}")
-    if response.status_code != 200 or not response.json().get("result", False):
+    response = workspaces_api_request(request.headers, workspace, username)
+    logger.debug(f"Workspaces API response: {response.json()}")
+    if response.status_code != 200 or response.json().get("username") != username:
         return False
     return True
 
