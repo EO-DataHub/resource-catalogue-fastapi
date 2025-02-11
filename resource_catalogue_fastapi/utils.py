@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ADES_URL = os.getenv("ADES_URL")
 AIRBUS_API_KEY = os.getenv("AIRBUS_API_KEY")
+WORKSPACES_CLAIM_PATH = os.getenv("WORKSPACES_CLAIM_PATH", "workspaces")
 
 
 def get_path_params(request: Request):
@@ -23,19 +24,15 @@ def get_path_params(request: Request):
     return request.scope.get("path_params", {})
 
 
-def opa_request(input_data: dict, opa_service_endpoint: str) -> requests.Response:
-    """Send a request to OPA service"""
-    logger.debug(f"Sending request to OPA service {opa_service_endpoint} with input: {input_data}")
-    return requests.post(opa_service_endpoint, json=input_data)
-
-
-def workspaces_api_request(headers: dict, workspace: str, user: str) -> requests.Response:
-    """Send a request to the workspaces API"""
-    workspaces_api_url = (
-        f"https://{os.getenv('EODH_DOMAIN')}/api/workspaces/{workspace}/users/{user}"
-    )
-    logger.debug(f"Sending request to Workspaces API: {workspaces_api_url} with headers: {headers}")
-    return requests.get(workspaces_api_url, headers=headers)
+def get_nested_value(data: dict, path: str, default=None):
+    """Retrieve a nested value from a dictionary using a dot-separated path."""
+    keys = path.split(".")
+    for key in keys:
+        if isinstance(data, dict) and key in data:
+            data = data[key]
+        else:
+            return default
+    return data
 
 
 def get_user_details(request: Request) -> tuple:
@@ -51,34 +48,30 @@ def get_user_details(request: Request) -> tuple:
         )
         logger.debug(f"Credentials: {credentials}")
         username = credentials.get("preferred_username", "")
-        roles = credentials.get("realm_access", {}).get("roles", [])
+        workspaces = get_nested_value(credentials, WORKSPACES_CLAIM_PATH, [])
 
     else:
         username = ""
-        roles = []
-    return username, roles
+        workspaces = []
+    return username, workspaces
 
 
-def check_policy(
+def validate_workspace_access(
     request: Request,
     path_params: dict,
-    opa_service_endpoint: str,
-    workspaces_domain: str,
 ) -> bool:
-    """Check OPA policy to determine if the request is allowed"""
-    username, roles = get_user_details(request)
+    """Check if the user has access to the workspace"""
+    username, workspaces = get_user_details(request)
 
     # Add values for logs
     logger.info("Logged in as user: %s", username)
-    logger.info("Roles: %s", roles)
+    logger.info("Workspaces: %s", workspaces)
 
     if not (workspace := path_params.get("workspace")):
         return False
 
-    response = workspaces_api_request(request.headers, workspace, username)
-    logger.debug(f"Workspaces API response: {response.status_code}")
-    logger.debug(f"Workspaces API response: {response.json()}")
-    if response.status_code != 200 or response.json().get("username") != username:
+    logger.info(f"Workspace: {workspace}")
+    if workspace not in workspaces:
         return False
     return True
 

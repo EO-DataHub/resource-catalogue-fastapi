@@ -13,7 +13,6 @@ from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
 
 from .utils import (
-    check_policy,
     delete_file_s3,
     execute_order_workflow,
     generate_airbus_access_token,
@@ -24,6 +23,7 @@ from .utils import (
     rate_limiter_dependency,
     update_stac_order_status,
     upload_file_s3,
+    validate_workspace_access,
 )
 
 logging.basicConfig(
@@ -91,7 +91,7 @@ def get_producer():
 
 def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
     if ENABLE_OPA_POLICY_CHECK:
-        if not check_policy(request, path_params, OPA_SERVICE_ENDPOINT, WORKSPACES_DOMAIN):
+        if not validate_workspace_access(request, path_params):
             raise HTTPException(status_code=403, detail="Access denied")
 
 
