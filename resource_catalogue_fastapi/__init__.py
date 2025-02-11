@@ -150,6 +150,7 @@ def upload_nested_files(
         if url_to_add == url and order_status is not None:
             try:
                 json_body = json.loads(body)
+                json_body["assets"] = {}
                 update_stac_order_status(json_body, None, order_status)
                 body = json.dumps(json_body)
                 ordered_item_key = workspace_key
