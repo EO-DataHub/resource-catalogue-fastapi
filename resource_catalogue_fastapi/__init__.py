@@ -154,11 +154,10 @@ def upload_nested_files(
                 update_stac_order_status(json_body, None, order_status)
                 # Temporary fix for EODHP-1162
                 for link in json_body.get("links", []):
-                    if "api/catalogue/stac/v1/supported-datasets" in link.get("href"):
-                        link["href"] = link["href"].replace(
-                            "api/catalogue/stac/v1/supported-datasets",
-                            "api/catalogue/stac/v1/catalogs/supported-datasets",
-                        )
+                    link["href"] = link["href"].replace(
+                        "api/catalogue/stac/v1/supported-datasets",
+                        "api/catalogue/stac/v1/catalogs/supported-datasets",
+                    )
                 body = json.dumps(json_body)
                 ordered_item_key = workspace_key
             except Exception as e:
