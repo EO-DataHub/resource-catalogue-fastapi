@@ -34,6 +34,7 @@ def workspaces_api_request(headers: dict, workspace: str, user: str) -> requests
     workspaces_api_url = (
         f"https://{os.getenv('EODH_DOMAIN')}/api/workspaces/{workspace}/users/{user}"
     )
+    logger.debug(f"Sending request to Workspaces API: {workspaces_api_url} with headers: {headers}")
     return requests.get(workspaces_api_url, headers=headers)
 
 
@@ -75,6 +76,7 @@ def check_policy(
         return False
 
     response = workspaces_api_request(request.headers, workspace, username)
+    logger.debug(f"Workspaces API response: {response.status_code}")
     logger.debug(f"Workspaces API response: {response.json()}")
     if response.status_code != 200 or response.json().get("username") != username:
         return False
