@@ -3,17 +3,16 @@ import logging
 import os
 from distutils.util import strtobool
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 import requests
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
 
 from .utils import (
-    check_policy,
     delete_file_s3,
     execute_order_workflow,
     generate_airbus_access_token,
@@ -24,6 +23,7 @@ from .utils import (
     rate_limiter_dependency,
     update_stac_order_status,
     upload_file_s3,
+    validate_workspace_access,
 )
 
 logging.basicConfig(
@@ -89,9 +89,11 @@ def get_producer():
     return producer
 
 
-def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
+def workspace_access_dependency(
+    request: Request, path_params: dict = Depends(get_path_params)  # noqa: B008
+):
     if ENABLE_OPA_POLICY_CHECK:
-        if not check_policy(request, path_params, OPA_SERVICE_ENDPOINT, WORKSPACES_DOMAIN):
+        if not validate_workspace_access(request, path_params):
             raise HTTPException(status_code=403, detail="Access denied")
 
 
@@ -150,7 +152,14 @@ def upload_nested_files(
         if url_to_add == url and order_status is not None:
             try:
                 json_body = json.loads(body)
+                json_body["assets"] = {}
                 update_stac_order_status(json_body, None, order_status)
+                # Temporary fix for EODHP-1162
+                for link in json_body.get("links", []):
+                    link["href"] = link["href"].replace(
+                        "api/catalogue/stac/v1/supported-datasets",
+                        "api/catalogue/stac/v1/catalogs/supported-datasets",
+                    )
                 body = json.dumps(json_body)
                 ordered_item_key = workspace_key
             except Exception as e:
@@ -194,7 +203,10 @@ def upload_single_item(url: str, workspace: str, workspace_key: str, order_statu
     return is_updated
 
 
-@app.post("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.post(
+    "/manage/catalogs/user-datasets/{workspace}",
+    dependencies=[Depends(workspace_access_dependency)],
+)
 async def create_item(
     workspace: str,
     request: ItemRequest,
@@ -222,7 +234,10 @@ async def create_item(
     return JSONResponse(content={"message": "Item created successfully"}, status_code=200)
 
 
-@app.delete("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.delete(
+    "/manage/catalogs/user-datasets/{workspace}",
+    dependencies=[Depends(workspace_access_dependency)],
+)
 async def delete_item(
     workspace: str,
     request: ItemRequest,
@@ -256,7 +271,10 @@ async def delete_item(
     return JSONResponse(content={"message": "Item deleted successfully"}, status_code=200)
 
 
-@app.put("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.put(
+    "/manage/catalogs/user-datasets/{workspace}",
+    dependencies=[Depends(workspace_access_dependency)],
+)
 async def update_item(
     workspace: str,
     request: ItemRequest,
@@ -286,16 +304,35 @@ async def update_item(
 
 @app.post(
     "/manage/catalogs/user-datasets/{workspace}/commercial-data",
-    dependencies=[Depends(opa_dependency)],
+    dependencies=[Depends(workspace_access_dependency)],
+    responses={
+        200: {
+            "content": {"application/json": {"example": {"message": "Item ordered successfully"}}}
+        }
+    },
 )
 async def order_item(
     request: Request,
     workspace: str,
-    order_request: OrderRequest,
+    order_request: Annotated[
+        OrderRequest,
+        Body(
+            examples=[
+                {
+                    "url": f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_pneo_data/items/ACQ_PNEO3_05300415120321",
+                    "product_bundle": "general_use",
+                },
+            ]
+        ),
+    ],
     producer=Depends(get_producer),  # noqa: B008
 ):
-    """Endpoint to create a new item and collection within a workspace with an order status, and
-    execute a workflow to order the item"""
+    """Create a new item and collection within a workspace with an order status, and
+    execute a workflow to order the item from a commercial data provider.
+
+    * url: The EODHP STAC item URL to order
+    * product_bundle: The product bundle to order from the commercial data provider
+    * extra_data: (Optional) A placeholder for future data options to include in the item"""
 
     authorization = request.headers.get("Authorization")
 

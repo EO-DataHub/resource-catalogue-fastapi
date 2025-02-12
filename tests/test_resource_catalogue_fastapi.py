@@ -120,7 +120,8 @@ def test_order_item_success(
                 False,
             ),
             call(
-                '{"stac_item": "data", "properties": {"order.status": "pending"}, "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
+                '{"stac_item": "data", "assets": {}, "properties": {"order.status": "pending"}, '
+                '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
                 "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
                 True,
@@ -172,14 +173,16 @@ def test_order_item_failure(
             ),
             call().__bool__(),
             call(
-                '{"stac_item": "data", "properties": {"order.status": "pending"}, "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
+                '{"stac_item": "data", "assets": {}, "properties": {"order.status": "pending"}, '
+                '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
                 "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
                 True,
             ),
             call().__bool__(),
             call(
-                '{"stac_item": "data", "properties": {"order.status": "failed"}, "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
+                '{"stac_item": "data", "properties": {"order.status": "failed"}, '
+                '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
                 "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
             ),
