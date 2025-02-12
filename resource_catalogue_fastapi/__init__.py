@@ -89,7 +89,9 @@ def get_producer():
     return producer
 
 
-def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
+def workspace_access_dependency(
+    request: Request, path_params: dict = Depends(get_path_params)  # noqa: B008
+):
     if ENABLE_OPA_POLICY_CHECK:
         if not validate_workspace_access(request, path_params):
             raise HTTPException(status_code=403, detail="Access denied")
@@ -201,7 +203,10 @@ def upload_single_item(url: str, workspace: str, workspace_key: str, order_statu
     return is_updated
 
 
-@app.post("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.post(
+    "/manage/catalogs/user-datasets/{workspace}",
+    dependencies=[Depends(workspace_access_dependency)],
+)
 async def create_item(
     workspace: str,
     request: ItemRequest,
@@ -229,7 +234,10 @@ async def create_item(
     return JSONResponse(content={"message": "Item created successfully"}, status_code=200)
 
 
-@app.delete("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.delete(
+    "/manage/catalogs/user-datasets/{workspace}",
+    dependencies=[Depends(workspace_access_dependency)],
+)
 async def delete_item(
     workspace: str,
     request: ItemRequest,
@@ -263,7 +271,10 @@ async def delete_item(
     return JSONResponse(content={"message": "Item deleted successfully"}, status_code=200)
 
 
-@app.put("/manage/catalogs/user-datasets/{workspace}", dependencies=[Depends(opa_dependency)])
+@app.put(
+    "/manage/catalogs/user-datasets/{workspace}",
+    dependencies=[Depends(workspace_access_dependency)],
+)
 async def update_item(
     workspace: str,
     request: ItemRequest,
@@ -293,7 +304,7 @@ async def update_item(
 
 @app.post(
     "/manage/catalogs/user-datasets/{workspace}/commercial-data",
-    dependencies=[Depends(opa_dependency)],
+    dependencies=[Depends(workspace_access_dependency)],
     responses={
         200: {
             "content": {"application/json": {"example": {"message": "Item ordered successfully"}}}
