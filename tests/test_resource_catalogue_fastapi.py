@@ -99,7 +99,7 @@ def test_order_item_success(
 
     url = "http://example.com/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_sar_data/items/file.json"
     # Define the request payload
-    payload = {"url": url, "product_bundle": "bundle"}
+    payload = {"url": url, "product_bundle": "bundle", "coordinates": [[0, 0], [0, 1], [1, 1]]}
 
     # Send the request
     response = client.post(
@@ -149,7 +149,7 @@ def test_order_item_failure(
 
     url = "http://example.com/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_sar_data/items/file.json"
     # Define the request payload
-    payload = {"url": url, "product_bundle": "bundle"}
+    payload = {"url": url, "product_bundle": "bundle", "coordinates": [[0, 0], [0, 1], [1, 1]]}
 
     # Send the request
     response = client.post(

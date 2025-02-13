@@ -125,6 +125,7 @@ class ItemRequest(BaseModel):
 
 class OrderRequest(ItemRequest):
     product_bundle: str
+    coordinates: list
 
 
 def upload_nested_files(
@@ -321,6 +322,7 @@ async def order_item(
                 {
                     "url": f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_pneo_data/items/ACQ_PNEO3_05300415120321",
                     "product_bundle": "general_use",
+                    "coordinates": [[0, 0], [0, 1], [1, 1]],
                 },
             ]
         ),
@@ -332,6 +334,7 @@ async def order_item(
 
     * url: The EODHP STAC item URL to order
     * product_bundle: The product bundle to order from the commercial data provider
+    * coordinates: (Optional) Coordinates of any area of interest (AOI)
     * extra_data: (Optional) A placeholder for future data options to include in the item"""
 
     authorization = request.headers.get("Authorization")
@@ -372,6 +375,7 @@ async def order_item(
             f"s3://{S3_BUCKET}/{stac_key}",
             commercial_data_bucket,
             order_request.product_bundle,
+            order_request.coordinates,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
