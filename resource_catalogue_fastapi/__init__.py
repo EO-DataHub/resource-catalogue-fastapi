@@ -136,7 +136,6 @@ def upload_nested_files(
     keys = {"added_keys": [], "updated_keys": []}
     ordered_item_key = None
     for url_to_add in files_to_add:
-        error_on_exist = False
         logger.info(f"Adding url {url_to_add}")
         body = get_file_from_url(url_to_add)
 
@@ -166,8 +165,6 @@ def upload_nested_files(
             except Exception as e:
                 logger.error(f"Error parsing item {url} to order as STAC: {e}")
                 raise
-            # If the item is being ordered, prevent a duplicate order by erroring if it exists
-            error_on_exist = True
 
         logger.info(f"Uploading item to workspace {workspace} with key {workspace_key}")
 
