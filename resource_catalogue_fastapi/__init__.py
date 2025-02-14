@@ -125,7 +125,7 @@ class ItemRequest(BaseModel):
 
 class OrderRequest(ItemRequest):
     product_bundle: str
-    coordinates: list
+    coordinates: Optional[list] = Field(default_factory=list)
 
 
 def upload_nested_files(

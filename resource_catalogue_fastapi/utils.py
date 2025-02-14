@@ -201,9 +201,10 @@ def execute_order_workflow(
             "commercial_data_bucket": commercial_data_bucket,
             "product_bundle": product_bundle,
             "stac_key": stac_uri,
-            "coordinates": str(coordinates),
         }
     }
+    if coordinates:
+        payload["inputs"]["coordinates"] = str(coordinates)
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 
