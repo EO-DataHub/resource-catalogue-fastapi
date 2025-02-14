@@ -206,6 +206,10 @@ def execute_order_workflow(
     if coordinates:
         payload["inputs"]["coordinates"] = str(coordinates)
 
+    # TODO: change when Airbus has been updated
+    elif provider_workspace == "planet":
+        payload["inputs"]["coordinates"] = "[]"
+
     logger.info(f"Sending request to {url} with payload: {payload}")
 
     response = requests.post(url, headers=headers, json=payload)
