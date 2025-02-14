@@ -322,7 +322,7 @@ async def order_item(
                 {
                     "url": f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_pneo_data/items/ACQ_PNEO3_05300415120321",
                     "product_bundle": "general_use",
-                    "coordinates": [[0, 0], [0, 1], [1, 1]],
+                    "coordinates": "[[[0, 0], [0, 1], [1, 1]]]",
                 },
             ]
         ),

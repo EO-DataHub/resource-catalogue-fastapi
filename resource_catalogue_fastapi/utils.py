@@ -213,7 +213,7 @@ def execute_order_workflow(
             "commercial_data_bucket": commercial_data_bucket,
             "product_bundle": product_bundle,
             "stac_key": stac_uri,
-            "coordinates": coordinates,
+            "coordinates": str(coordinates),
         }
     }
 
