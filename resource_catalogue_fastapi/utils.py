@@ -98,23 +98,11 @@ def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
         rate_limit(workspace)
 
 
-def upload_file_s3(body: str, bucket: str, key: str, error_on_exist: bool = False) -> bool:
+def upload_file_s3(body: str, bucket: str, key: str) -> bool:
     """Upload data to an S3 bucket. Returns a bool indicating whether the file existed previously"""
     s3_client = boto3.client("s3")
     file_exists = False
 
-    try:
-        # Check if the file already exists
-        s3_client.head_object(Bucket=bucket, Key=key)
-        file_exists = True
-    except ClientError as e:
-        # If a 404 error is raised, the file does not exist
-        if e.response["Error"]["Code"] != "404":
-            logging.error(f"Error checking if file exists: {e}")
-            raise
-    if error_on_exist and file_exists:
-        logging.error(f"File already exists: {key}")
-        raise FileExistsError(f"File already exists: {key}")
     try:
         s3_client.put_object(Body=body, Bucket=bucket, Key=key)
     except ClientError as e:

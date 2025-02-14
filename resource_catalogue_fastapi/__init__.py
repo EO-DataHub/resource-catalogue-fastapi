@@ -172,7 +172,7 @@ def upload_nested_files(
         logger.info(f"Uploading item to workspace {workspace} with key {workspace_key}")
 
         # Upload item to S3
-        is_updated = upload_file_s3(body, S3_BUCKET, workspace_key, error_on_exist)
+        is_updated = upload_file_s3(body, S3_BUCKET, workspace_key)
 
         logger.info("Item uploaded successfully")
 
