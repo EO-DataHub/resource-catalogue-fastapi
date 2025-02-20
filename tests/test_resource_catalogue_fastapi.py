@@ -30,7 +30,7 @@ def test_create_item_success(mock_create_producer, mock_get_file_from_url, mock_
     # Verify interactions with mocks
     mock_get_file_from_url.assert_called_once_with("http://example.com/file.json")
     mock_upload_file_s3.assert_called_once_with(
-        b"file content", "test-bucket", "test-workspace/saved-data/file.json", False
+        b"file content", "test-bucket", "test-workspace/saved-data/file.json"
     )
     mock_create_producer.assert_called_once_with(
         topic="harvested", producer_name="resource_catalogue_fastapi"
@@ -77,7 +77,7 @@ def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
     # Verify interactions with mocks
     mock_get_file_from_url.assert_called_once_with("http://example.com/file.json")
     mock_upload_file_s3.assert_called_once_with(
-        b"file content", "test-bucket", "test-workspace/saved-data/file.json", False
+        b"file content", "test-bucket", "test-workspace/saved-data/file.json"
     )
 
 
@@ -117,14 +117,12 @@ def test_order_item_success(
                 b'{"stac_item": "data"}',
                 "test-bucket",
                 "test-workspace/commercial-data/collections/airbus_sar_data.json",
-                False,
             ),
             call(
                 '{"stac_item": "data", "assets": {}, "properties": {"order.status": "pending"}, '
                 '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
                 "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
-                True,
             ),
         ],
         any_order=True,
@@ -169,7 +167,6 @@ def test_order_item_failure(
                 b'{"stac_item": "data"}',
                 "test-bucket",
                 "test-workspace/commercial-data/collections/airbus_sar_data.json",
-                False,
             ),
             call().__bool__(),
             call(
@@ -177,7 +174,6 @@ def test_order_item_failure(
                 '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
                 "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
-                True,
             ),
             call().__bool__(),
             call(
