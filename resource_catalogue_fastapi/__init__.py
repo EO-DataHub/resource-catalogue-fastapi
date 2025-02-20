@@ -331,8 +331,8 @@ async def order_item(
 
     * url: The EODHP STAC item URL to order
     * product_bundle: The product bundle to order from the commercial data provider
-    * coordinates: (Optional) Coordinates to limit the AOI of the item for purchase where possible. Given in the
-      same nested format as STAC
+    * coordinates: (Optional) Coordinates to limit the AOI of the item for purchase where possible. Given
+      in the same nested format as STAC
     * extra_data: (Optional) A placeholder for future data options to include in the item"""
 
     authorization = request.headers.get("Authorization")
