@@ -1,3 +1,4 @@
+import os
 from unittest.mock import MagicMock, call, patch
 
 import requests
@@ -20,8 +21,14 @@ def test_create_item_success(mock_create_producer, mock_get_file_from_url, mock_
     # Define the request payload
     payload = {"url": "http://example.com/file.json"}
 
+    test_user_catalogue = os.getenv("USER_CATALOGUE_ID", "user")
+
+    print(f"/manage/catalogs/{test_user_catalogue}/catalogs/test-workspace")
+
     # Send the request
-    response = client.post("/manage/catalogs/user-datasets/test-workspace", json=payload)
+    response = client.post(
+        f"/manage/catalogs/{test_user_catalogue}/catalogs/test-workspace", json=payload
+    )
 
     # Assertions
     assert response.status_code == 200
@@ -43,9 +50,11 @@ def test_delete_item_success(mock_delete_file_s3):
     # Define the request payload
     payload = {"url": "http://example.com/file.json"}
 
+    test_user_catalogue = os.getenv("USER_CATALOGUE_ID", "user")
+
     # Send the request
     response = client.request(
-        "DELETE", "/manage/catalogs/user-datasets/test-workspace", json=payload
+        "DELETE", f"/manage/catalogs/{test_user_catalogue}/catalogs/test-workspace", json=payload
     )
 
     # Assertions
@@ -67,8 +76,12 @@ def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
     # Define the request payload
     payload = {"url": "http://example.com/file.json"}
 
+    test_user_catalogue = os.getenv("USER_CATALOGUE_ID", "user")
+
     # Send the request
-    response = client.put("/manage/catalogs/user-datasets/test-workspace", json=payload)
+    response = client.put(
+        f"/manage/catalogs/{test_user_catalogue}/catalogs/test-workspace", json=payload
+    )
 
     # Assertions
     assert response.status_code == 200
@@ -97,13 +110,19 @@ def test_order_item_success(
     mock_response.raise_for_status = MagicMock()
     mock_post_request.return_value = mock_response
 
-    url = "http://example.com/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_sar_data/items/file.json"
+    test_rc_root = os.getenv("RC_ROOT", "api/catalogue/stac")
+    test_catalogue_id = os.getenv("COMMERCIAL_CATALOGUE_ID", "commercial")
+
+    url = f"http://example.com/{test_rc_root}/catalogs/{test_catalogue_id}/catalogs/airbus/collections/airbus_sar_data/items/file.json"
     # Define the request payload
     payload = {"url": url, "product_bundle": "bundle"}
 
+    test_user_catalogue = os.getenv("USER_CATALOGUE_ID", "user")
+
     # Send the request
     response = client.post(
-        "/manage/catalogs/user-datasets/test-workspace/commercial-data", json=payload
+        f"/manage/catalogs/{test_user_catalogue}/catalogs/test-workspace/catalogs/commercial-data",
+        json=payload,
     )
 
     # Assertions
@@ -116,13 +135,13 @@ def test_order_item_success(
             call(
                 b'{"stac_item": "data"}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data.json",
+                "test-workspace/commercial-data/airbus/collections/airbus_sar_data.json",
             ),
             call(
                 '{"stac_item": "data", "assets": {}, "properties": {"order.status": "pending"}, '
                 '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
+                "test-workspace/commercial-data/airbus/collections/airbus_sar_data/items/file.json",
             ),
         ],
         any_order=True,
@@ -145,13 +164,23 @@ def test_order_item_failure(
     mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("Mocked error")
     mock_post_request.return_value = mock_response
 
-    url = "http://example.com/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_sar_data/items/file.json"
+    test_rc_root = os.getenv("RC_ROOT", "api/catalogue/stac")
+    test_catalogue_id = os.getenv("COMMERCIAL_CATALOGUE_ID", "commercial")
+
+    url = f"http://example.com/{test_rc_root}/catalogs/{test_catalogue_id}/catalogs/airbus/collections/airbus_sar_data/items/file.json"
     # Define the request payload
     payload = {"url": url, "product_bundle": "bundle"}
 
+    test_user_catalogue = os.getenv("USER_CATALOGUE_ID", "user")
+
+    print(
+        f"/manage/catalogs/{test_user_catalogue}/catalogs/test-workspace/catalogs/commercial-data"
+    )
+
     # Send the request
     response = client.post(
-        "/manage/catalogs/user-datasets/test-workspace/commercial-data", json=payload
+        f"/manage/catalogs/{test_user_catalogue}/catalogs/test-workspace/catalogs/commercial-data",
+        json=payload,
     )
 
     # Assertions
@@ -166,21 +195,21 @@ def test_order_item_failure(
             call(
                 b'{"stac_item": "data"}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data.json",
+                "test-workspace/commercial-data/airbus/collections/airbus_sar_data.json",
             ),
             call().__bool__(),
             call(
                 '{"stac_item": "data", "assets": {}, "properties": {"order.status": "pending"}, '
                 '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
+                "test-workspace/commercial-data/airbus/collections/airbus_sar_data/items/file.json",
             ),
             call().__bool__(),
             call(
                 '{"stac_item": "data", "properties": {"order.status": "failed"}, '
                 '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
+                "test-workspace/commercial-data/airbus/collections/airbus_sar_data/items/file.json",
             ),
         ],
         any_order=True,
@@ -203,8 +232,10 @@ def test_fetch_airbus_asset_success(mock_generate_token, mock_requests_get):
         MagicMock(content=b"image data", headers={"Content-Type": "image/jpeg"}),
     ]
 
+    test_catalogue_id = os.getenv("COMMERCIAL_CATALOGUE_ID", "commercial")
+
     response = client.get(
-        "/stac/catalogs/supported-datasets/airbus/collections/collection/items/item/thumbnail"
+        f"/stac/catalogs/{test_catalogue_id}/catalogs/airbus/collections/collection/items/item/thumbnail"
     )
 
     assert response.status_code == 200
@@ -227,8 +258,15 @@ def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
     mock_item_response.raise_for_status = MagicMock()
     mock_requests_get.side_effect = [mock_item_response]
 
+    test_rc_root = os.getenv("RC_ROOT", "api/catalogue/stac")
+    test_catalogue_id = os.getenv("COMMERCIAL_CATALOGUE_ID", "commercial")
+
+    print(
+        f"/stac/catalogs/{test_catalogue_id}/catalogs/airbus/collections/collection/items/item/thumbnail"
+    )
+
     response = client.get(
-        "/stac/catalogs/supported-datasets/airbus/collections/collection/items/item/thumbnail"
+        f"/stac/catalogs/{test_catalogue_id}/catalogs/airbus/collections/collection/items/item/thumbnail"
     )
 
     assert response.status_code == 404
@@ -236,5 +274,5 @@ def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
 
     # Verify interactions with mocks
     mock_requests_get.assert_called_once_with(
-        "https://dev.eodatahub.org.uk/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/collection/items/item"
+        f"https://dev.eodatahub.org.uk/{test_rc_root}/catalogs/{test_catalogue_id}/catalogs/airbus/collections/collection/items/item"
     )
