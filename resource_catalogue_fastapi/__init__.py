@@ -40,6 +40,13 @@ WORKSPACES_DOMAIN = os.getenv("WORKSPACES_DOMAIN", "workspaces.dev.eodhp.eco-ke-
 
 EODH_DOMAIN = os.getenv("EODH_DOMAIN", "dev.eodatahub.org.uk")
 
+# Resource Catalogue Root URL
+RC_ROOT = os.getenv("RC_ROOT", "api/catalogue/stac")
+
+# Resource Catalogue Names
+COMMERCIAL_CAT_ID = os.getenv("COMMERCIAL_CATALOGUE_ID", "commercial")
+USER_CAT_ID = os.getenv("USER_CATALOGUE_ID", "user")
+
 # OPA service endpoint
 OPA_SERVICE_ENDPOINT = os.getenv(
     "OPA_SERVICE_ENDPOINT", "http://opal-client.opal:8181/v1/data/workspaces/allow"
@@ -157,8 +164,8 @@ def upload_nested_files(
                 # Temporary fix for EODHP-1162
                 for link in json_body.get("links", []):
                     link["href"] = link["href"].replace(
-                        "api/catalogue/stac/v1/supported-datasets",
-                        "api/catalogue/stac/v1/catalogs/supported-datasets",
+                        f"{RC_ROOT}/{COMMERCIAL_CAT_ID}",
+                        f"{RC_ROOT}/catalogs/{COMMERCIAL_CAT_ID}",
                     )
                 body = json.dumps(json_body)
                 ordered_item_key = workspace_key
@@ -202,7 +209,7 @@ def upload_single_item(url: str, workspace: str, workspace_key: str, order_statu
 
 
 @app.post(
-    "/manage/catalogs/user-datasets/{workspace}",
+    f"/manage/catalogs/{USER_CAT_ID}/catalogs/{{workspace}}",
     dependencies=[Depends(workspace_access_dependency)],
 )
 async def create_item(
@@ -224,7 +231,7 @@ async def create_item(
         "updated_keys": keys.get("updated_keys", []),
         "deleted_keys": [],
         "source": workspace,
-        "target": f"user-datasets/{workspace}",
+        "target": f"{USER_CAT_ID}/{workspace}",
     }
     logger.info(f"Sending message to pulsar: {output_data}")
     producer.send((json.dumps(output_data)).encode("utf-8"))
@@ -233,7 +240,7 @@ async def create_item(
 
 
 @app.delete(
-    "/manage/catalogs/user-datasets/{workspace}",
+    f"/manage/catalogs/{USER_CAT_ID}/catalogs/{{workspace}}",
     dependencies=[Depends(workspace_access_dependency)],
 )
 async def delete_item(
@@ -262,7 +269,7 @@ async def delete_item(
         "updated_keys": [],
         "deleted_keys": [workspace_key],
         "source": workspace,
-        "target": f"user-datasets/{workspace}",
+        "target": f"{USER_CAT_ID}/{workspace}",
     }
     producer.send((json.dumps(output_data)).encode("utf-8"))
 
@@ -270,7 +277,7 @@ async def delete_item(
 
 
 @app.put(
-    "/manage/catalogs/user-datasets/{workspace}",
+    f"/manage/catalogs/{USER_CAT_ID}/catalogs/{{workspace}}",
     dependencies=[Depends(workspace_access_dependency)],
 )
 async def update_item(
@@ -292,7 +299,7 @@ async def update_item(
         "updated_keys": keys.get("updated_keys", []),
         "deleted_keys": [],
         "source": workspace,
-        "target": f"user-datasets/{workspace}",
+        "target": f"{USER_CAT_ID}/{{workspace}}",
     }
     logger.info(f"Sending message to pulsar: {output_data}")
     producer.send((json.dumps(output_data)).encode("utf-8"))
@@ -301,7 +308,7 @@ async def update_item(
 
 
 @app.post(
-    "/manage/catalogs/user-datasets/{workspace}/commercial-data",
+    f"/manage/catalogs/{USER_CAT_ID}/catalogs/{{workspace}}/catalogs/commercial-data",
     dependencies=[Depends(workspace_access_dependency)],
     responses={
         200: {
@@ -317,7 +324,7 @@ async def order_item(
         Body(
             examples=[
                 {
-                    "url": f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_pneo_data/items/ACQ_PNEO3_05300415120321",
+                    "url": f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/{COMMERCIAL_CAT_ID}/airbus/collections/airbus_pneo_data/items/ACQ_PNEO3_05300415120321",
                     "product_bundle": "general_use",
                     "coordinates": "[[[0, 0], [0, 1], [1, 1], [0, 0]]]",
                 },
@@ -350,7 +357,7 @@ async def order_item(
         "updated_keys": keys.get("updated_keys", []),
         "deleted_keys": [],
         "source": workspace,
-        "target": f"user-datasets/{workspace}",
+        "target": f"{USER_CAT_ID}/{workspace}",
     }
     if collection_id.startswith("airbus"):
         catalog_name = "airbus"
@@ -391,7 +398,7 @@ async def order_item(
 
 def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     """Fetch an asset via an external link in an Airbus item, using a generated access token"""
-    item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
+    item_url = f"https://{EODH_DOMAIN}/{RC_ROOT}/catalogs/{COMMERCIAL_CAT_ID}/catalogs/airbus/collections/{collection}/items/{item}"
     logger.info(f"Fetching item data from {item_url}")
     item_response = requests.get(item_url)
     item_response.raise_for_status()
@@ -414,7 +421,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
 
 
 @app.get(
-    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail",
+    f"/stac/catalogs/{COMMERCIAL_CAT_ID}/catalogs/airbus/collections/{{collection}}/items/{{item}}/thumbnail",
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_thumbnail(collection: str, item: str):
@@ -427,7 +434,7 @@ async def get_thumbnail(collection: str, item: str):
 
 
 @app.get(
-    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/quicklook",
+    f"/stac/catalogs/{COMMERCIAL_CAT_ID}/airbus/collections/{{collection}}/items/{{item}}/quicklook",
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_quicklook(collection: str, item: str):
