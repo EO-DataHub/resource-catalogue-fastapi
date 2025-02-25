@@ -354,11 +354,12 @@ async def order_item(
     }
     if collection_id.startswith("airbus"):
         catalog_name = "airbus"
-        commercial_data_bucket = "commercial-data-airbus"
         if collection_id == "airbus_sar_data":
             adaptor_name = "airbus-sar-adaptor"
+            commercial_data_bucket = "commercial-data-airbus"
         else:
             adaptor_name = "airbus-optical-adaptor"
+            commercial_data_bucket = "airbus-commercial-data"
     else:
         catalog_name = "planet"
         adaptor_name = "planet-adaptor"
