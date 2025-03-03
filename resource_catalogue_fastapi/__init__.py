@@ -118,12 +118,18 @@ class OrderStatus(Enum):
     CANCELED = "canceled"
 
 
+class OrderableCatalogEnum(str, Enum):
+    planet = "planet"
+    airbus = "airbus"
+
+
 class ItemRequest(BaseModel):
     url: str
     extra_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
-class OrderRequest(ItemRequest):
+class OrderRequest(BaseModel):
+    workspace: str
     product_bundle: str
     coordinates: Optional[list] = Field(default_factory=list)
 
@@ -141,10 +147,6 @@ def upload_nested_files(
 
         # Extract the path after the first catalog from the URL to create the S3 key
         path_after_catalog = url_to_add.split("/", 9)[-1]
-        try:
-            collection_id = path_after_catalog.split("collections/")[1].split("/items/")[0]
-        except (IndexError, KeyError):
-            collection_id = None
         workspace_key = f"{workspace}/{catalog_name}/{path_after_catalog}"
         if not os.path.splitext(workspace_key)[1]:
             workspace_key += ".json"
@@ -177,7 +179,7 @@ def upload_nested_files(
             keys["updated_keys"].append(workspace_key)
         else:
             keys["added_keys"].append(workspace_key)
-    return keys, ordered_item_key, collection_id
+    return keys, ordered_item_key
 
 
 def upload_single_item(url: str, workspace: str, workspace_key: str, order_status: str):
@@ -214,7 +216,7 @@ async def create_item(
     """Endpoint to create a new item and collection within a workspace"""
 
     url = request.url
-    keys, _, _ = upload_nested_files(url, workspace)
+    keys, _ = upload_nested_files(url, workspace)
 
     output_data = {
         "id": f"{workspace}/create_item",
@@ -282,7 +284,7 @@ async def update_item(
     """Endpoint to update an item and collection within a workspace"""
 
     url = request.url
-    keys, _, _ = upload_nested_files(url, workspace)
+    keys, _ = upload_nested_files(url, workspace)
 
     output_data = {
         "id": f"{workspace}/update_item",
@@ -301,7 +303,7 @@ async def update_item(
 
 
 @app.post(
-    "/manage/catalogs/user-datasets/{workspace}/commercial-data",
+    "/stac/catalogs/commercial/catalogs/{catalog}/collections/{collection}/items/{item}/order",
     dependencies=[Depends(workspace_access_dependency)],
     responses={
         200: {
@@ -311,15 +313,17 @@ async def update_item(
 )
 async def order_item(
     request: Request,
-    workspace: str,
+    catalog: OrderableCatalogEnum,
+    collection: str,
+    item: str,
     order_request: Annotated[
         OrderRequest,
         Body(
             examples=[
                 {
-                    "url": f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_pneo_data/items/ACQ_PNEO3_05300415120321",
+                    "workspace": "my-workspace",
                     "product_bundle": "general_use",
-                    "coordinates": "[[[0, 0], [0, 1], [1, 1], [0, 0]]]",
+                    "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]],
                 },
             ]
         ),
@@ -329,17 +333,18 @@ async def order_item(
     """Create a new item and collection within a workspace with an order status, and
     execute a workflow to order the item from a commercial data provider.
 
-    * url: The EODHP STAC item URL to order
+    * workspace: The workspace into which the item will be ordered and delivered
     * product_bundle: The product bundle to order from the commercial data provider
-    * coordinates: (Optional) Coordinates to limit the AOI of the item for purchase where possible. Given
-      in the same nested format as STAC
-    * extra_data: (Optional) A placeholder for future data options to include in the item"""
+    * coordinates: (Optional) Coordinates of a polygon to limit the AOI of the item for purchase where
+      possible. Given in the same nested format as STAC"""
 
     authorization = request.headers.get("Authorization")
 
-    url = order_request.url
-    keys, stac_key, collection_id = upload_nested_files(
-        url, workspace, "commercial-data", OrderStatus.PENDING.value
+    workspace = order_request.workspace
+    order_url = str(request.url)
+    base_item_url = order_url.rsplit("/order", 1)[0]
+    keys, stac_key = upload_nested_files(
+        base_item_url, workspace, "commercial-data", OrderStatus.PENDING.value
     )
 
     output_data = {
@@ -352,22 +357,19 @@ async def order_item(
         "source": workspace,
         "target": f"user-datasets/{workspace}",
     }
-    if collection_id.startswith("airbus"):
-        catalog_name = "airbus"
-        if collection_id == "airbus_sar_data":
-            adaptor_name = "airbus-sar-adaptor"
-            commercial_data_bucket = "commercial-data-airbus"
-        else:
-            adaptor_name = "airbus-optical-adaptor"
-            commercial_data_bucket = "airbus-commercial-data"
+    if collection == "airbus_sar_data":
+        adaptor_name = "airbus-sar-adaptor"
+        commercial_data_bucket = "commercial-data-airbus"
+    elif catalog == "airbus":
+        adaptor_name = "airbus-optical-adaptor"
+        commercial_data_bucket = "airbus-commercial-data"
     else:
-        catalog_name = "planet"
         adaptor_name = "planet-adaptor"
         commercial_data_bucket = S3_BUCKET
 
     try:
         ades_response = execute_order_workflow(
-            catalog_name,
+            catalog,
             workspace,
             adaptor_name,
             authorization,
@@ -379,7 +381,7 @@ async def order_item(
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
         logger.error(f"Error executing order workflow: {e}")
-        upload_single_item(url, workspace, stac_key, OrderStatus.FAILED.value)
+        upload_single_item(base_item_url, workspace, stac_key, OrderStatus.FAILED.value)
         logger.info(f"Sending message to pulsar: {output_data}")
         producer.send((json.dumps(output_data)).encode("utf-8"))
         raise HTTPException(status_code=500, detail="Error executing order workflow") from e
