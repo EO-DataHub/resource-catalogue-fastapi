@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -210,7 +211,7 @@ def execute_order_workflow(
     else:
         payload["inputs"]["coordinates"] = "[]"
     if end_users is not None:
-        payload["inputs"]["end_users"] = str(end_users)
+        payload["inputs"]["end_users"] = json.dumps([end_user.dict() for end_user in end_users])
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 
