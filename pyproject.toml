@@ -73,6 +73,7 @@ dependencies = [
   "pulsar-client",
   "pyproj",
   "shapely",
+  "kubernetes",
 ]
 
 # List additional groups of dependencies here (e.g. development
