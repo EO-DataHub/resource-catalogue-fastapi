@@ -191,12 +191,12 @@ def execute_order_workflow(
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
     url = f"{ADES_URL}/{provider_workspace}/ogc-api/processes/{workflow_name}/execution"
-    # headers = {
-    #     "Authorization": authorization,
-    #     "Accept": "application/json",
-    #     "Content-Type": "application/json",
-    #     "Prefer": "respond-async",
-    # }
+    headers = {
+        "Authorization": authorization,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Prefer": "respond-async",
+    }
     logger.info(f"Executing workflow {workflow_name} for user {user_workspace}")
     payload = {
         "inputs": {
@@ -215,11 +215,9 @@ def execute_order_workflow(
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 
-    raise NotImplementedError("Sending of request is halted for debugging purposes")
-
-    # response = requests.post(url, headers=headers, json=payload)
-    # response.raise_for_status()
-    # return response.json()
+    response = requests.post(url, headers=headers, json=payload)
+    response.raise_for_status()
+    return response.json()
 
 
 def generate_airbus_access_token(env: str = "dev") -> str:
