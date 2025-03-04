@@ -3,6 +3,7 @@ import os
 import time
 import urllib.request
 from distutils.util import strtobool
+from typing import List, Optional
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -184,16 +185,17 @@ def execute_order_workflow(
     commercial_data_bucket: str,
     product_bundle: str,
     coordinates: list,
+    end_users: Optional[List],
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
     url = f"{ADES_URL}/{provider_workspace}/ogc-api/processes/{workflow_name}/execution"
-    headers = {
-        "Authorization": authorization,
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "Prefer": "respond-async",
-    }
+    # headers = {
+    #     "Authorization": authorization,
+    #     "Accept": "application/json",
+    #     "Content-Type": "application/json",
+    #     "Prefer": "respond-async",
+    # }
     logger.info(f"Executing workflow {workflow_name} for user {user_workspace}")
     payload = {
         "inputs": {
@@ -207,12 +209,16 @@ def execute_order_workflow(
         payload["inputs"]["coordinates"] = str(coordinates)
     else:
         payload["inputs"]["coordinates"] = "[]"
+    if end_users is not None:
+        payload["inputs"]["end_users"] = str(end_users)
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 
-    response = requests.post(url, headers=headers, json=payload)
-    response.raise_for_status()
-    return response.json()
+    raise NotImplementedError("Sending of request is halted for debugging purposes")
+
+    # response = requests.post(url, headers=headers, json=payload)
+    # response.raise_for_status()
+    # return response.json()
 
 
 def generate_airbus_access_token(env: str = "dev") -> str:
