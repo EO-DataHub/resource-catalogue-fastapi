@@ -12,10 +12,11 @@ from fastapi.staticfiles import StaticFiles
 from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
 
+from .airbus_client import AirbusClient
+from .planet_client import PlanetClient
 from .utils import (
     delete_file_s3,
     execute_order_workflow,
-    generate_airbus_access_token,
     get_file_from_url,
     get_nested_files_from_url,
     get_path_params,
@@ -59,6 +60,9 @@ PULSAR_URL = os.environ.get("PULSAR_URL", "pulsar://pulsar-broker.pulsar:6650")
 pulsar_client = PulsarClient(PULSAR_URL)
 producer = None
 
+AIRBUS_ENV = os.getenv("AIRBUS_ENV", "prod")
+airbus_client = AirbusClient(AIRBUS_ENV)
+planet_client = PlanetClient()
 
 app = FastAPI(
     title="EODHP Resource Catalogue Manager",
@@ -132,6 +136,20 @@ class OrderRequest(BaseModel):
     workspace: str
     product_bundle: str
     coordinates: Optional[list] = Field(default_factory=list)
+
+
+class QuoteRequest(BaseModel):
+    """Request body for quote endpoint"""
+
+    coordinates: list = None
+    itemUuids: list = []
+
+
+class QuoteResponse(BaseModel):
+    """Response body for quote endpoint"""
+
+    value: float
+    units: str
 
 
 def upload_nested_files(
@@ -392,6 +410,173 @@ async def order_item(
     return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
 
 
+@app.post(
+    "/stac/catalogs/commercial/catalogs/{catalog}/collections/{collection}/items/{acquisition_id}/quote",
+    response_model=QuoteResponse,
+    responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+def quote(
+    request: Request,
+    catalog: OrderableCatalogEnum,
+    collection: str,
+    acquisition_id: str,
+    body: Annotated[
+        QuoteRequest,
+        Body(
+            examples=[
+                {
+                    "coordinates": [[[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5]]],
+                    "itemUuids": [
+                        "12345678-1234-1234-1234-123456789012",
+                        "87654321-4321-4321-4321-210987654321",
+                    ],
+                }
+            ],
+        ),
+    ],
+):
+    """Return a quote for a Planet or Airbus acquisition ID within an EODH catalogue and collection.
+
+    * coordinates: (Airbus-only) Coordinates are in the same format used by STAC
+    * itemUuids: (Airbus-only) This is required for stereo and multi Pléiades Neo orders only, and
+      consists of a list of ids corresponding to individual mono items that are part of the order
+
+    """
+
+    if catalog == "airbus":
+        if collection == "airbus_sar_data":
+            if AIRBUS_ENV == "prod":
+                url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
+            else:
+                url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
+            request_body = {"acquisitions": [acquisition_id]}
+        else:
+            url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
+            spectral_processing = "bundle"
+            if collection == "airbus_pneo_data":
+                product_type = "PleiadesNeoArchiveMono"
+                contract_id = "CTR24005241"
+                item_uuids = body.itemUuids
+                item_id = None
+                if len(item_uuids) > 1:
+                    product_type = "PleiadesNeoArchiveMulti"
+                    spectral_processing = "full_bundle"
+            elif collection == "airbus_phr_data":
+                product_type = "PleiadesArchiveMono"
+                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
+                item_uuids = None
+                item_id = body.acquisitionId
+            elif collection == "airbus_spot_data":
+                product_type = "SPOTArchive1.5Mono"
+                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
+                item_uuids = None
+                item_id = body.acquisitionId
+            else:
+                return JSONResponse(
+                    status_code=404,
+                    content={"detail": f"Collection {collection} not recognised"},
+                )
+            request_body = {
+                "aoi": [
+                    {
+                        "id": 1,
+                        "name": "Polygon 1",
+                        "geometry": {"type": "Polygon", "coordinates": body.coordinates},
+                    }
+                ],
+                "programReference": "",
+                "contractId": contract_id,
+                "items": [
+                    {
+                        "notifications": [],
+                        "stations": [],
+                        "productTypeId": product_type,
+                        "aoiId": 1,
+                        "properties": [],
+                    }
+                ],
+                "primaryMarket": "NQUAL",
+                "secondaryMarket": "",
+                "customerReference": "Polygon 1",
+                "optionsPerProductType": [
+                    {
+                        "productTypeId": product_type,
+                        "options": [
+                            {"key": "delivery_method", "value": "on_the_flow"},
+                            {"key": "fullStrip", "value": "false"},
+                            {"key": "image_format", "value": "dimap_geotiff"},
+                            {"key": "licence", "value": "standard"},
+                            {"key": "pixel_coding", "value": "12bits"},
+                            {"key": "priority", "value": "standard"},
+                            {"key": "processing_level", "value": "primary"},
+                            {"key": "radiometric_processing", "value": "reflectance"},
+                            {"key": "spectral_processing", "value": spectral_processing},
+                        ],
+                    }
+                ],
+                "orderGroup": "",
+                "delivery": {"type": "network"},
+            }
+
+            if item_uuids:
+                data_source_ids = []
+                for item_uuid in item_uuids:
+                    data_source_ids.append({"catalogId": "PublicMOC", "catalogItemId": item_uuid})
+                request_body["items"][0]["dataSourceIds"] = data_source_ids
+
+            if item_id:
+                request_body["items"][0]["datastripIds"] = [item_id]
+
+        # username, _ = get_user_details(request)
+        access_token = airbus_client.generate_access_token()
+        if not access_token:
+            return JSONResponse(
+                status_code=500, content={"detail": "Failed to generate access token"}
+            )
+
+        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+        try:
+            response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
+        except requests.RequestException as e:
+            return JSONResponse(status_code=500, content={"detail": str(e)})
+
+        price_json = {}
+        if collection == "airbus_sar_data":
+            for item in response_body:
+                if item.get("acquisitionId") == acquisition_id:
+                    price_json = {
+                        "units": item["price"]["currency"],
+                        "value": item["price"]["total"],
+                    }
+                    break
+        else:
+            price_json = {
+                "units": response_body["currency"],
+                "value": response_body["totalAmount"],
+            }
+
+        if price_json:
+            return QuoteResponse(value=price_json["value"], units=price_json["units"])
+
+        return JSONResponse(
+            status_code=404, content={"detail": "Quote not found for given acquisition ID"}
+        )
+
+    elif catalog == "planet":
+        request_body = {"acquisitions": [acquisition_id], "collection": collection}
+        response_body = planet_client.get_quote_from_planet(request_body)
+
+        return QuoteResponse(value=response_body["value"], units=response_body["units"])
+
+    else:
+        return JSONResponse(
+            content={"message:" f"{catalog} not recognised"},
+            status_code=404,
+        )
+
+
 def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     """Fetch an asset via an external link in an Airbus item, using a generated access token"""
     item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
@@ -404,7 +589,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
         raise HTTPException(status_code=404, detail=f"External {asset_name} link not found in item")
     logger.info(f"Fetching {asset_name} from {asset_link}")
 
-    access_token = generate_airbus_access_token("prod")
+    access_token = airbus_client.generate_access_token()
     headers = {"Authorization": f"Bearer {access_token}"}
     asset_response = requests.get(asset_link, headers=headers)
     asset_response.raise_for_status()

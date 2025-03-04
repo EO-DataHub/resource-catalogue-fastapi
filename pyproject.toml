@@ -71,6 +71,8 @@ dependencies = [
   "pyyaml",
   "boto3",
   "pulsar-client",
+  "pyproj",
+  "shapely",
 ]
 
 # List additional groups of dependencies here (e.g. development

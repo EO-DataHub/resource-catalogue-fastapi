@@ -97,13 +97,13 @@ def test_order_item_success(
     mock_response.raise_for_status = MagicMock()
     mock_post_request.return_value = mock_response
 
-    url = "http://example.com/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_sar_data/items/file.json"
     # Define the request payload
-    payload = {"url": url, "product_bundle": "bundle"}
+    payload = {"workspace": "test-workspace", "product_bundle": "bundle"}
 
     # Send the request
     response = client.post(
-        "/manage/catalogs/user-datasets/test-workspace/commercial-data", json=payload
+        "/stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/file/order",
+        json=payload,
     )
 
     # Assertions
@@ -116,13 +116,13 @@ def test_order_item_success(
             call(
                 b'{"stac_item": "data"}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data.json",
+                "test-workspace/commercial-data/airbus_sar_data.json",
             ),
             call(
                 '{"stac_item": "data", "assets": {}, "properties": {"order.status": "pending"}, '
                 '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
+                "test-workspace/commercial-data/airbus_sar_data/items/file.json",
             ),
         ],
         any_order=True,
@@ -145,13 +145,14 @@ def test_order_item_failure(
     mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("Mocked error")
     mock_post_request.return_value = mock_response
 
-    url = "http://example.com/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_sar_data/items/file.json"
+    url = "http://testserver/stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/file"
     # Define the request payload
-    payload = {"url": url, "product_bundle": "bundle"}
+    payload = {"workspace": "test-workspace", "product_bundle": "bundle"}
 
     # Send the request
     response = client.post(
-        "/manage/catalogs/user-datasets/test-workspace/commercial-data", json=payload
+        "/stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/file/order",
+        json=payload,
     )
 
     # Assertions
@@ -166,21 +167,21 @@ def test_order_item_failure(
             call(
                 b'{"stac_item": "data"}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data.json",
+                "test-workspace/commercial-data/airbus_sar_data.json",
             ),
             call().__bool__(),
             call(
                 '{"stac_item": "data", "assets": {}, "properties": {"order.status": "pending"}, '
                 '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
+                "test-workspace/commercial-data/airbus_sar_data/items/file.json",
             ),
             call().__bool__(),
             call(
                 '{"stac_item": "data", "properties": {"order.status": "failed"}, '
                 '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
                 "test-bucket",
-                "test-workspace/commercial-data/collections/airbus_sar_data/items/file.json",
+                "test-workspace/commercial-data/airbus_sar_data/items/file.json",
             ),
         ],
         any_order=True,
@@ -190,7 +191,7 @@ def test_order_item_failure(
 
 
 @patch("resource_catalogue_fastapi.requests.get")
-@patch("resource_catalogue_fastapi.generate_airbus_access_token")
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
 def test_fetch_airbus_asset_success(mock_generate_token, mock_requests_get):
     mock_generate_token.return_value = "mocked_access_token"
     mock_item_response = MagicMock()
@@ -212,14 +213,14 @@ def test_fetch_airbus_asset_success(mock_generate_token, mock_requests_get):
     assert response.content == b"image data"
 
     # Verify interactions with mocks
-    mock_generate_token.assert_called_once_with("prod")
+    mock_generate_token.assert_called_once_with()
     mock_requests_get.assert_any_call(
         "https://example.com/thumbnail", headers={"Authorization": "Bearer mocked_access_token"}
     )
 
 
 @patch("resource_catalogue_fastapi.requests.get")
-@patch("resource_catalogue_fastapi.generate_airbus_access_token")
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
 def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
     mock_generate_token.return_value = "mocked_access_token"
     mock_item_response = MagicMock()
