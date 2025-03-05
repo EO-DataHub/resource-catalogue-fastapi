@@ -469,12 +469,12 @@ def quote(
                 product_type = "PleiadesArchiveMono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
-                item_id = body.acquisitionId
+                item_id = acquisition_id
             elif collection == "airbus_spot_data":
                 product_type = "SPOTArchive1.5Mono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
-                item_id = body.acquisitionId
+                item_id = acquisition_id
             else:
                 return JSONResponse(
                     status_code=404,

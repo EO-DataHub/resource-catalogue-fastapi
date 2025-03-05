@@ -85,7 +85,7 @@ dependencies = [
 # Similar to `dependencies` above, these must be valid existing
 # projects.
 [project.optional-dependencies] # Optional
-dev = ["pip-tools", "pytest", "pytest-xdist", "pytest-mock", "pytest-watcher", "black", "ruff", "isort", "pre-commit", "httpx"]
+dev = ["pip-tools", "pytest", "pytest-xdist", "pytest-mock", "pytest-watcher", "black", "ruff", "isort", "pre-commit", "httpx", "requests-mock"]
 
 # List URLs that are relevant to your project
 #
