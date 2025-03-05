@@ -93,11 +93,11 @@ def get_producer():
     return producer
 
 
-def workspace_access_dependency(
+async def workspace_access_dependency(
     request: Request, path_params: dict = Depends(get_path_params)  # noqa: B008
 ):
     if ENABLE_OPA_POLICY_CHECK:
-        if not validate_workspace_access(request, path_params):
+        if not await validate_workspace_access(request, path_params):
             raise HTTPException(status_code=403, detail="Access denied")
 
 

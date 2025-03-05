@@ -3,6 +3,7 @@ import os
 import time
 import urllib.request
 from distutils.util import strtobool
+from typing import Optional
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -21,6 +22,15 @@ WORKSPACES_CLAIM_PATH = os.getenv("WORKSPACES_CLAIM_PATH", "workspaces")
 def get_path_params(request: Request):
     logger.debug("CALCULATING PATH PARAMETERS")
     return request.scope.get("path_params", {})
+
+
+async def get_body_params(request: Request) -> Optional[dict]:
+    try:
+        body = await request.json()
+        return body
+    except Exception as e:
+        logger.error(f"Error parsing request body: {e}")
+        return None
 
 
 def get_nested_value(data: dict, path: str, default=None):
@@ -53,7 +63,7 @@ def get_user_details(request: Request) -> tuple:
     return username, workspaces
 
 
-def validate_workspace_access(
+async def validate_workspace_access(
     request: Request,
     path_params: dict,
 ) -> bool:
@@ -65,6 +75,13 @@ def validate_workspace_access(
     logger.info("Workspaces: %s", workspaces)
 
     if not (workspace := path_params.get("workspace")):
+        body_params = await get_body_params(request)
+        logger.debug(f"Checking body params for workspace: {body_params}")
+        if body_params:
+            workspace = body_params.get("workspace")
+
+    if not workspace:
+        logger.info("No workspace found in the request")
         return False
 
     logger.info(f"Workspace: {workspace}")
