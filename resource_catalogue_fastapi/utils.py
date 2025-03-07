@@ -1,8 +1,10 @@
+import json
 import logging
 import os
 import time
 import urllib.request
 from distutils.util import strtobool
+from typing import List, Optional
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -184,6 +186,7 @@ def execute_order_workflow(
     commercial_data_bucket: str,
     product_bundle: str,
     coordinates: list,
+    end_users: Optional[List],
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
@@ -207,6 +210,8 @@ def execute_order_workflow(
         payload["inputs"]["coordinates"] = str(coordinates)
     else:
         payload["inputs"]["coordinates"] = "[]"
+    if end_users is not None:
+        payload["inputs"]["end_users"] = json.dumps([end_user.dict() for end_user in end_users])
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 
