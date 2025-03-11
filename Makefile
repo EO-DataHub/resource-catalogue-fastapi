@@ -1,7 +1,7 @@
 .PHONY: dockerbuild dockerpush test testonce ruff black lint isort pre-commit-check requirements-update requirements setup
 VERSION ?= latest
 IMAGENAME = resource-catalogue-fastapi
-DOCKERREPO ?= public.ecr.aws/n1b3o1k2
+DOCKERREPO ?= public.ecr.aws/eodh
 
 dockerbuild:
 	DOCKER_BUILDKIT=1 docker build -t ${IMAGENAME}:${VERSION} .

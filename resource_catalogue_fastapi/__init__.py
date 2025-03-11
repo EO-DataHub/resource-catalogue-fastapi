@@ -413,7 +413,7 @@ async def order_item(
 
 def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     """Fetch an asset via an external link in an Airbus item, using a generated access token"""
-    item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
+    item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}"
     logger.info(f"Fetching item data from {item_url}")
     item_response = requests.get(item_url)
     item_response.raise_for_status()

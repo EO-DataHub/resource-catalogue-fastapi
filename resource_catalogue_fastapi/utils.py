@@ -47,6 +47,7 @@ def get_user_details(request: Request) -> tuple:
             options={"verify_signature": False},
             algorithms=["HS256"],
         )
+        logging.debug(f"Credentials: {credentials}")
         username = credentials.get("preferred_username", "")
         workspaces = get_nested_value(credentials, WORKSPACES_CLAIM_PATH, [])
 
