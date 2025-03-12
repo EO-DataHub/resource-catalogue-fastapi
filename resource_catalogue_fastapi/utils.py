@@ -1,8 +1,10 @@
+import json
 import logging
 import os
 import time
 import urllib.request
 from distutils.util import strtobool
+from typing import List, Optional
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -185,6 +187,7 @@ def execute_order_workflow(
     commercial_data_bucket: str,
     product_bundle: str,
     coordinates: list,
+    end_users: Optional[List],
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
@@ -208,6 +211,8 @@ def execute_order_workflow(
         payload["inputs"]["coordinates"] = str(coordinates)
     else:
         payload["inputs"]["coordinates"] = "[]"
+    if end_users is not None:
+        payload["inputs"]["end_users"] = json.dumps(end_users)
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 
@@ -236,3 +241,22 @@ def generate_airbus_access_token(env: str = "dev") -> str:
     response = requests.post(url, headers=headers, data=data)
 
     return response.json().get("access_token")
+
+
+def validate_country_code(country_code: str):
+    """Ensure that a given country code is valid against current Airbus API"""
+    url = "https://order.api.oneatlas.airbus.com/api/v1/properties"
+    access_token = generate_airbus_access_token("prod")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    properties_response = requests.get(url, headers=headers)
+    properties = properties_response.json().get("properties")
+
+    countries = next((prop["values"] for prop in properties if prop["key"] == "countries"), [])
+    country_ids = [country["id"] for country in countries]
+
+    if country_code not in country_ids:
+        valid_codes = ", ".join(country_ids)
+        raise HTTPException(
+            status_code=400,
+            detail=f"End user country code {country_code} is invalid. Valid codes are: {valid_codes}",
+        )

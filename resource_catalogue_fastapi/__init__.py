@@ -23,6 +23,7 @@ from .utils import (
     rate_limiter_dependency,
     update_stac_order_status,
     upload_file_s3,
+    validate_country_code,
     validate_workspace_access,
 )
 
@@ -118,6 +119,11 @@ class OrderStatus(Enum):
     CANCELED = "canceled"
 
 
+class EndUser(BaseModel):
+    endUserName: str
+    country: str
+
+
 class ItemRequest(BaseModel):
     url: str
     extra_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
@@ -126,6 +132,7 @@ class ItemRequest(BaseModel):
 class OrderRequest(ItemRequest):
     product_bundle: str
     coordinates: Optional[list] = Field(default_factory=list)
+    endUserCountry: Optional[str] = None
 
 
 def upload_nested_files(
@@ -320,6 +327,7 @@ async def order_item(
                     "url": f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_pneo_data/items/ACQ_PNEO3_05300415120321",
                     "product_bundle": "general_use",
                     "coordinates": "[[[0, 0], [0, 1], [1, 1], [0, 0]]]",
+                    "endUserCountry": "GB",
                 },
             ]
         ),
@@ -333,6 +341,7 @@ async def order_item(
     * product_bundle: The product bundle to order from the commercial data provider
     * coordinates: (Optional) Coordinates to limit the AOI of the item for purchase where possible. Given
       in the same nested format as STAC
+    * endUserCountry: (Optional) A country code corresponding to the country of the end user
     * extra_data: (Optional) A placeholder for future data options to include in the item"""
 
     authorization = request.headers.get("Authorization")
@@ -341,6 +350,21 @@ async def order_item(
     keys, stac_key, collection_id = upload_nested_files(
         url, workspace, "commercial-data", OrderStatus.PENDING.value
     )
+
+    # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders
+    optical_collections = ["airbus_pneo_data", "airbus_phr_data", "airbus_spot_data"]
+    end_users = None
+    if collection_id in optical_collections:
+        end_users = []
+        if country_code := order_request.endUserCountry:
+            validate_country_code(country_code)
+            username, _ = get_user_details(request)
+            end_users = [{"endUserName": username, "country": country_code}]
+    if collection_id == "airbus_pneo_data" and not end_users:
+        raise HTTPException(
+            status_code=400,
+            detail="End users must be supplied for PNEO orders",
+        )
 
     output_data = {
         "id": f"{workspace}/order_item",
@@ -375,6 +399,7 @@ async def order_item(
             commercial_data_bucket,
             order_request.product_bundle,
             order_request.coordinates,
+            end_users,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
