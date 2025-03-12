@@ -127,6 +127,11 @@ class OrderableCatalogEnum(str, Enum):
     airbus = "airbus"
 
 
+class EndUser(BaseModel):
+    endUserName: str
+    country: str
+
+
 class ItemRequest(BaseModel):
     url: str
     extra_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
@@ -136,6 +141,7 @@ class OrderRequest(BaseModel):
     workspace: str
     product_bundle: str
     coordinates: Optional[list] = Field(default_factory=list)
+    endUserCountry: Optional[str] = None
 
 
 class QuoteRequest(BaseModel):
@@ -342,6 +348,7 @@ async def order_item(
                     "workspace": "my-workspace",
                     "product_bundle": "general_use",
                     "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]],
+                    "endUserCountry": "GB",
                 },
             ]
         ),
@@ -354,7 +361,8 @@ async def order_item(
     * workspace: The workspace into which the item will be ordered and delivered
     * product_bundle: The product bundle to order from the commercial data provider
     * coordinates: (Optional) Coordinates of a polygon to limit the AOI of the item for purchase where
-      possible. Given in the same nested format as STAC"""
+      possible. Given in the same nested format as STAC
+    * endUserCountry: (Optional) A country code corresponding to the country of the end user"""
 
     authorization = request.headers.get("Authorization")
 
@@ -364,6 +372,21 @@ async def order_item(
     keys, stac_key = upload_nested_files(
         base_item_url, workspace, "commercial-data", OrderStatus.PENDING.value
     )
+
+    # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders
+    optical_collections = ["airbus_pneo_data", "airbus_phr_data", "airbus_spot_data"]
+    end_users = None
+    if collection in optical_collections:
+        end_users = []
+        if country_code := order_request.endUserCountry:
+            airbus_client.validate_country_code(country_code)
+            username, _ = get_user_details(request)
+            end_users = [{"endUserName": username, "country": country_code}]
+    if collection == "airbus_pneo_data" and not end_users:
+        raise HTTPException(
+            status_code=400,
+            detail="End users must be supplied for PNEO orders",
+        )
 
     output_data = {
         "id": f"{workspace}/order_item",
@@ -395,6 +418,7 @@ async def order_item(
             commercial_data_bucket,
             order_request.product_bundle,
             order_request.coordinates,
+            end_users,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
@@ -589,7 +613,7 @@ def quote(
 
 def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     """Fetch an asset via an external link in an Airbus item, using a generated access token"""
-    item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}"
+    item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}"
     logger.info(f"Fetching item data from {item_url}")
     item_response = requests.get(item_url)
     item_response.raise_for_status()

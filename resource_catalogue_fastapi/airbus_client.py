@@ -3,6 +3,7 @@ import logging
 import os
 
 import requests
+from fastapi import HTTPException
 from kubernetes import client, config
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
@@ -65,3 +66,21 @@ class AirbusClient:
         response = requests.post(url, json=body, headers=headers)
         response.raise_for_status()
         return response.json()
+
+    def validate_country_code(self, country_code: str):
+        """Ensure that a given country code is valid against current Airbus API"""
+        url = "https://order.api.oneatlas.airbus.com/api/v1/properties"
+        access_token = self.generate_access_token()
+        headers = {"Authorization": f"Bearer {access_token}"}
+        properties_response = requests.get(url, headers=headers)
+        properties = properties_response.json().get("properties")
+
+        countries = next((prop["values"] for prop in properties if prop["key"] == "countries"), [])
+        country_ids = [country["id"] for country in countries]
+
+        if country_code not in country_ids:
+            valid_codes = ", ".join(country_ids)
+            raise HTTPException(
+                status_code=400,
+                detail=f"End user country code {country_code} is invalid. Valid codes are: {valid_codes}",
+            )

@@ -250,7 +250,7 @@ def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
 
     # Verify interactions with mocks
     mock_requests_get.assert_called_once_with(
-        "https://dev.eodatahub.org.uk/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/collection/items/item"
+        "https://dev.eodatahub.org.uk/api/catalogue/stac/catalogs/supported-datasets/catalogs/airbus/collections/collection/items/item"
     )
 
 

@@ -1,9 +1,10 @@
+import json
 import logging
 import os
 import time
 import urllib.request
 from distutils.util import strtobool
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -54,6 +55,7 @@ def get_user_details(request: Request) -> tuple:
             options={"verify_signature": False},
             algorithms=["HS256"],
         )
+        logging.debug(f"Credentials: {credentials}")
         username = credentials.get("preferred_username", "")
         workspaces = get_nested_value(credentials, WORKSPACES_CLAIM_PATH, [])
 
@@ -200,6 +202,7 @@ def execute_order_workflow(
     commercial_data_bucket: str,
     product_bundle: str,
     coordinates: list,
+    end_users: Optional[List],
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
@@ -223,6 +226,8 @@ def execute_order_workflow(
         payload["inputs"]["coordinates"] = str(coordinates)
     else:
         payload["inputs"]["coordinates"] = "[]"
+    if end_users is not None:
+        payload["inputs"]["end_users"] = json.dumps(end_users)
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 
