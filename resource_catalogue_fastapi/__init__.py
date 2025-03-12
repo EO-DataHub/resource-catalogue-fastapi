@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from .airbus_client import AirbusClient
 from .planet_client import PlanetClient
 from .utils import (
+    OrderStatus,
     delete_file_s3,
     execute_order_workflow,
     get_file_from_url,
@@ -24,6 +25,7 @@ from .utils import (
     rate_limiter_dependency,
     update_stac_order_status,
     upload_file_s3,
+    upload_stac_hierarchy_for_order,
     validate_workspace_access,
 )
 
@@ -112,16 +114,6 @@ def ensure_user_logged_in(request: Request):
             raise HTTPException(status_code=404)
 
 
-class OrderStatus(Enum):
-    ORDERABLE = "orderable"
-    ORDERED = "ordered"
-    PENDING = "pending"
-    SHIPPING = "shipping"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELED = "canceled"
-
-
 class OrderableCatalogEnum(str, Enum):
     planet = "planet"
     airbus = "airbus"
@@ -180,12 +172,6 @@ def upload_nested_files(
                 json_body = json.loads(body)
                 json_body["assets"] = {}
                 update_stac_order_status(json_body, None, order_status)
-                # Temporary fix for EODHP-1162
-                for link in json_body.get("links", []):
-                    link["href"] = link["href"].replace(
-                        "api/catalogue/stac/v1/supported-datasets",
-                        "api/catalogue/stac/v1/catalogs/supported-datasets",
-                    )
                 body = json.dumps(json_body)
                 ordered_item_key = workspace_key
             except Exception as e:
@@ -347,7 +333,7 @@ async def order_item(
                 {
                     "workspace": "my-workspace",
                     "product_bundle": "general_use",
-                    "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]],
+                    "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
                     "endUserCountry": "GB",
                 },
             ]
@@ -369,8 +355,8 @@ async def order_item(
     workspace = order_request.workspace
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
-    keys, stac_key = upload_nested_files(
-        base_item_url, workspace, "commercial-data", OrderStatus.PENDING.value
+    added_keys, stac_item_key, item_data = upload_stac_hierarchy_for_order(
+        base_item_url, catalog, collection, item, workspace
     )
 
     # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders
@@ -392,8 +378,8 @@ async def order_item(
         "id": f"{workspace}/order_item",
         "workspace": workspace,
         "bucket_name": S3_BUCKET,
-        "added_keys": keys.get("added_keys", []),
-        "updated_keys": keys.get("updated_keys", []),
+        "added_keys": added_keys,
+        "updated_keys": [],
         "deleted_keys": [],
         "source": workspace,
         "target": f"user-datasets/{workspace}",
@@ -414,7 +400,7 @@ async def order_item(
             workspace,
             adaptor_name,
             authorization,
-            f"s3://{S3_BUCKET}/{stac_key}",
+            f"s3://{S3_BUCKET}/{stac_item_key}",
             commercial_data_bucket,
             order_request.product_bundle,
             order_request.coordinates,
@@ -423,7 +409,7 @@ async def order_item(
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
         logger.error(f"Error executing order workflow: {e}")
-        upload_single_item(base_item_url, workspace, stac_key, OrderStatus.FAILED.value)
+        upload_single_item(base_item_url, workspace, stac_item_key, OrderStatus.FAILED.value)
         logger.info(f"Sending message to pulsar: {output_data}")
         producer.send((json.dumps(output_data)).encode("utf-8"))
         raise HTTPException(status_code=500, detail="Error executing order workflow") from e
@@ -431,7 +417,12 @@ async def order_item(
     logger.info(f"Sending message to pulsar: {output_data}")
     producer.send((json.dumps(output_data)).encode("utf-8"))
 
-    return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
+    location_url = (
+        f"{EODH_DOMAIN}/api/catalogue/user/catalogs/{workspace}/catalogs/commercial-data/"
+        f"catalogs/{catalog}/collections/{collection}/items/{item}"
+    )
+
+    return JSONResponse(content=item_data, status_code=201, headers={"Location": location_url})
 
 
 @app.post(

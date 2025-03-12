@@ -4,6 +4,7 @@ import os
 import time
 import urllib.request
 from distutils.util import strtobool
+from enum import Enum
 from typing import List, Optional
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -18,6 +19,16 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ADES_URL = os.getenv("ADES_URL")
 WORKSPACES_CLAIM_PATH = os.getenv("WORKSPACES_CLAIM_PATH", "workspaces")
+
+
+class OrderStatus(Enum):
+    ORDERABLE = "orderable"
+    ORDERED = "ordered"
+    PENDING = "pending"
+    SHIPPING = "shipping"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELED = "canceled"
 
 
 def get_path_params(request: Request):
@@ -174,14 +185,96 @@ def get_nested_files_from_url(url: str) -> list:
     return files_to_add
 
 
-def update_stac_order_status(stac_item: dict, item_id: str, order_status: str):
+def upload_stac_hierarchy_for_order(
+    base_item_url: str, catalog_id: str, collection_id: str, item_id: str, workspace: str
+):
+    """Upload an item and its associated collection and catalog to the workspace to track an order"""
+    collection_description = (
+        f"Purchased {collection_id.capitalize().replace('_', ' ')}, including both "
+        f"completed purchases and ongoing order records"
+    )
+    catalog_description = (
+        f"Purchased {catalog_id.capitalize()} data, including both completed purchases "
+        f"and ongoing order records"
+    )
+
+    # Fetch the STAC item
+    item_response = requests.get(base_item_url)
+    item_response.raise_for_status()
+    item_data = item_response.json()
+
+    update_stac_order_status(item_data, None, OrderStatus.PENDING.value)
+    item_data["assets"] = {}
+
+    # Fetch the STAC collection URL from the item links
+    collection_url = None
+    for link in item_data.get("links", []):
+        if link.get("rel") == "collection":
+            collection_url = link.get("href")
+            break
+    if not collection_url:
+        raise ValueError("Collection URL not found in item links")
+
+    collection_response = requests.get(collection_url)
+    collection_response.raise_for_status()
+    collection_data = collection_response.json()
+
+    # Modify the description of the STAC collection
+    collection_data["description"] = collection_description
+
+    # Fetch the STAC catalog URL from the item links
+    catalog_url = None
+    for link in collection_data.get("links", []):
+        if link.get("rel") == "parent":
+            catalog_url = link.get("href")
+            break
+    if not catalog_url:
+        raise ValueError("Collection URL not found in item links")
+
+    catalog_response = requests.get(catalog_url)
+    catalog_response.raise_for_status()
+    catalog_data = catalog_response.json()
+
+    # Modify the description of the STAC catalog
+    catalog_data["description"] = catalog_description
+
+    catalog_data["links"] = []
+    collection_data["links"] = []
+    item_data["links"] = []
+
+    # Upload the STAC catalog, collection and item to the workspace
+    catalog_name = "commercial-data"
+    catalog_key = f"{workspace}/{catalog_name}/{catalog_id}.json"
+    collection_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}.json"
+    item_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}/{item_id}.json"
+    added_keys = [catalog_key, collection_key, item_key]
+    upload_file_s3(
+        body=json.dumps(catalog_data),
+        bucket=workspace,
+        key=catalog_key,
+    )
+    upload_file_s3(
+        body=json.dumps(collection_data),
+        bucket=workspace,
+        key=collection_key,
+    )
+    upload_file_s3(
+        body=json.dumps(item_data),
+        bucket=workspace,
+        key=item_key,
+    )
+
+    return added_keys, item_key, item_data
+
+
+def update_stac_order_status(stac_item: dict, order_id: str, order_status: str):
     """Update the STAC item with the order status using the STAC Order extension"""
     # Update or add fields relating to the order
     if "properties" not in stac_item:
         stac_item["properties"] = {}
 
-    if item_id is not None:
-        stac_item["properties"]["order.id"] = item_id
+    if order_id is not None:
+        stac_item["properties"]["order.id"] = order_id
     stac_item["properties"]["order.status"] = order_status
 
     # Update or add the STAC extension if not already present
