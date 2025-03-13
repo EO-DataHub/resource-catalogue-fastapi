@@ -3,7 +3,7 @@ import logging
 import os
 from distutils.util import strtobool
 from enum import Enum
-from typing import Annotated, Any, Dict, List, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
 
 import requests
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
@@ -149,6 +149,20 @@ class ItemRequest(BaseModel):
     extra_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
+class ProductBundle(str, Enum):
+    general_use = "General use"
+    visual = "Visual"
+    basic = "Basic"
+    analytic = "Analytic"
+
+
+class ProductBundleRadar(str, Enum):
+    SSC = "SSC"
+    MGD = "MGD"
+    GEC = "GEC"
+    EEC = "EEC"
+
+
 class LicenceRadar(str, Enum):
     SINGLE_USER = "Single User Licence"
     MULTI_2_5 = "Multi User (2 - 5) Licence"
@@ -192,10 +206,10 @@ class LicenceOptical(str, Enum):
 
 
 class OrderRequest(BaseModel):
-    productBundle: str
+    productBundle: Union[ProductBundle, ProductBundleRadar]
     coordinates: Optional[list] = Field(default_factory=list)
     endUserCountry: Optional[str] = None
-    licence: str = None
+    licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
 
 
 class QuoteRequest(BaseModel):
@@ -203,7 +217,7 @@ class QuoteRequest(BaseModel):
 
     coordinates: list = None
     itemUuids: list = []
-    licence: str = None
+    licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
 
 
 def validate_licence(collection: str, licence: str):
@@ -235,6 +249,25 @@ def validate_licence(collection: str, licence: str):
             )
         return LicenceOptical(licence)
     return None
+
+
+def validate_product_bundle(collection: str, product_bundle: str):
+    if collection == OrderableAirbusCollection.sar.value:
+        allowed_bundles = {e.value for e in ProductBundleRadar}
+        if product_bundle not in allowed_bundles:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid product bundle for a radar item. Valid bundles are: {allowed_bundles}",
+            )
+        return ProductBundleRadar(product_bundle)
+
+    allowed_bundles = {e.value for e in ProductBundle}
+    if product_bundle not in allowed_bundles:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid product bundle. Valid bundles are: {allowed_bundles}",
+        )
+    return ProductBundle(product_bundle)
 
 
 class QuoteResponse(BaseModel):
@@ -425,7 +458,7 @@ async def order_item(
         Body(
             examples=[
                 {
-                    "productBundle": "general_use",
+                    "productBundle": "General use",
                     "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
                     "endUserCountry": "GB",
                     "licence": "Standard",
@@ -445,6 +478,7 @@ async def order_item(
     * licence: (Airbus-only) The licence type for the order"""
 
     licence = validate_licence(collection.value, order_request.licence)
+    product_bundle = validate_product_bundle(collection.value, order_request.productBundle)
 
     username, workspaces = get_user_details(request)
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
@@ -505,7 +539,7 @@ async def order_item(
             authorization,
             f"s3://{S3_BUCKET}/{stac_item_key}",
             commercial_data_bucket,
-            order_request.productBundle,
+            product_bundle.value,
             order_request.coordinates,
             end_users,
             licence.airbus_value,
