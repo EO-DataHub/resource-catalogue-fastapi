@@ -167,7 +167,6 @@ class LicenceOptical(str, Enum):
 
 
 class OrderRequest(BaseModel):
-    workspace: str
     productBundle: str
     coordinates: Optional[list] = Field(default_factory=list)
     endUserCountry: Optional[str] = None
@@ -401,7 +400,6 @@ async def order_item(
         Body(
             examples=[
                 {
-                    "workspace": "my-workspace",
                     "productBundle": "general_use",
                     "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
                     "endUserCountry": "GB",
@@ -415,7 +413,6 @@ async def order_item(
     """Create a new item and collection within a workspace with an order status, and
     execute a workflow to order the item from a commercial data provider.
 
-    * workspace: The workspace into which the item will be ordered and delivered
     * productBundle: The product bundle to order from the commercial data provider
     * coordinates: (Optional) Coordinates of a polygon to limit the AOI of the item for purchase where
       possible. Given in the same nested format as STAC
@@ -424,9 +421,15 @@ async def order_item(
 
     licence = validate_licence(collection, order_request.licence)
 
+    username, workspaces = get_user_details(request)
+    # workspaces from user details was originally a list, now usually expect string containing one workspace.
+    workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
+    if not workspace:
+        # This should never occur due to the workspace access dependency
+        raise HTTPException(status_code=404)
+
     authorization = request.headers.get("Authorization")
 
-    workspace = order_request.workspace
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
     added_keys, stac_item_key, item_data = upload_stac_hierarchy_for_order(
@@ -440,7 +443,6 @@ async def order_item(
         end_users = []
         if country_code := order_request.endUserCountry:
             airbus_client.validate_country_code(country_code)
-            username, _ = get_user_details(request)
             end_users = [{"endUserName": username, "country": country_code}]
     if collection == "airbus_pneo_data" and not end_users:
         raise HTTPException(
