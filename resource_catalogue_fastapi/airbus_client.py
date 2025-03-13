@@ -63,7 +63,9 @@ class AirbusClient:
 
     def get_quote_from_airbus(self, url: str, body: dict, headers: dict) -> dict:
         """Get a quote from Airbus API"""
+        logger.debug(f"Airbus API request: {url}, {body}")
         response = requests.post(url, json=body, headers=headers)
+        logger.info(f"Airbus API response: {response.json()}")
         response.raise_for_status()
         return response.json()
 

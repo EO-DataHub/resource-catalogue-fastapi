@@ -129,11 +129,49 @@ class ItemRequest(BaseModel):
     extra_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
+class LicenceRadar(str, Enum):
+    SINGLE_USER = "Single User Licence"
+    MULTI_2_5 = "Multi User (2 - 5) Licence"
+    MULTI_6_30 = "Multi User (6 - 30) Licence"
+
+    @property
+    def airbus_value(self):
+        return self.value
+
+
+class LicenceOptical(str, Enum):
+    STANDARD = "Standard"
+    BACKGROUND = "Background Layer"
+    STANDARD_BACKGROUND = "Standard + Background Layer"
+    ACADEMIC = "Academic"
+    MEDIA = "Media Licence"
+    STANDARD_MULTI_2_5 = "Standard Multi End-Users (2-5)"
+    STANDARD_MULTI_6_10 = "Standard Multi End-Users (6-10)"
+    STANDARD_MULTI_11_30 = "Standard Multi End-Users (11-30)"
+    STANDARD_MULTI_30 = "Standard Multi End-Users (>30)"
+
+    @property
+    def airbus_value(self):
+        mappings = {
+            "Standard": "standard",
+            "Background Layer": "background_layer",
+            "Standard + Background Layer": "stand_background_layer",
+            "Academic": "educ",
+            "Media Licence": "media",
+            "Standard Multi End-Users (2-5)": "standard_1_5",
+            "Standard Multi End-Users (6-10)": "standard_6_10",
+            "Standard Multi End-Users (11-30)": "standard_11_30",
+            "Standard Multi End-Users (>30)": "standard_up_30",
+        }
+        return mappings[self.value]
+
+
 class OrderRequest(BaseModel):
     workspace: str
-    product_bundle: str
+    productBundle: str
     coordinates: Optional[list] = Field(default_factory=list)
     endUserCountry: Optional[str] = None
+    licence: str = None
 
 
 class QuoteRequest(BaseModel):
@@ -141,6 +179,38 @@ class QuoteRequest(BaseModel):
 
     coordinates: list = None
     itemUuids: list = []
+    licence: str = None
+
+
+def validate_licence(collection: str, licence: str):
+    if collection == "airbus_sar_data":
+        allowed_licences = {e.value for e in LicenceRadar}
+        if not licence:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Licence is required for a radar item. Valid licences are: {allowed_licences}",
+            )
+        if licence not in allowed_licences:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid licence for a radar item. Valid licences are: {allowed_licences}",
+            )
+        return LicenceRadar(licence)
+
+    elif collection in ["airbus_pneo_data", "airbus_phr_data", "airbus_spot_data"]:
+        allowed_licences = {e.value for e in LicenceOptical}
+        if not licence:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Licence is required for an optical item. Valid licences are: {allowed_licences}",
+            )
+        if licence not in allowed_licences:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid licence for an optical item. Valid licences are: {allowed_licences}",
+            )
+        return LicenceOptical(licence)
+    return None
 
 
 class QuoteResponse(BaseModel):
@@ -332,9 +402,10 @@ async def order_item(
             examples=[
                 {
                     "workspace": "my-workspace",
-                    "product_bundle": "general_use",
+                    "productBundle": "general_use",
                     "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
                     "endUserCountry": "GB",
+                    "licence": "Standard",
                 },
             ]
         ),
@@ -345,10 +416,13 @@ async def order_item(
     execute a workflow to order the item from a commercial data provider.
 
     * workspace: The workspace into which the item will be ordered and delivered
-    * product_bundle: The product bundle to order from the commercial data provider
+    * productBundle: The product bundle to order from the commercial data provider
     * coordinates: (Optional) Coordinates of a polygon to limit the AOI of the item for purchase where
       possible. Given in the same nested format as STAC
-    * endUserCountry: (Optional) A country code corresponding to the country of the end user"""
+    * endUserCountry: (Optional) A country code corresponding to the country of the end user
+    * licence: (Airbus-only) The licence type for the order"""
+
+    licence = validate_licence(collection, order_request.licence)
 
     authorization = request.headers.get("Authorization")
 
@@ -402,9 +476,10 @@ async def order_item(
             authorization,
             f"s3://{S3_BUCKET}/{stac_item_key}",
             commercial_data_bucket,
-            order_request.product_bundle,
+            order_request.productBundle,
             order_request.coordinates,
             end_users,
+            licence.airbus_value,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
@@ -446,6 +521,7 @@ def quote(
                         "12345678-1234-1234-1234-123456789012",
                         "87654321-4321-4321-4321-210987654321",
                     ],
+                    "licence": "Standard",
                 }
             ],
         ),
@@ -457,10 +533,11 @@ def quote(
       same nested format as STAC
     * itemUuids: (Airbus-only) This is required for stereo and multi Pléiades Neo orders only, and
       consists of a list of ids corresponding to individual mono items that are part of the order
-
+    * licence: (Airbus-only) The licence type for the order
     """
 
     coordinates = body.coordinates
+    licence = validate_licence(collection, body.licence)
 
     if catalog == "airbus":
         if collection == "airbus_sar_data":
@@ -468,7 +545,7 @@ def quote(
                 url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
             else:
                 url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
-            request_body = {"acquisitions": [acquisition_id]}
+            request_body = {"acquisitions": [acquisition_id], "orderTemplate": licence.airbus_value}
         else:
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             spectral_processing = "bundle"
@@ -495,6 +572,16 @@ def quote(
                     status_code=404,
                     content={"detail": f"Collection {collection} not recognised"},
                 )
+            if not coordinates:
+                order_url = str(request.url)
+                base_item_url = order_url.rsplit("/quote", 1)[0]
+
+                # Fetch coordinates from the STAC item
+                item_response = requests.get(base_item_url)
+                item_response.raise_for_status()
+                item_data = item_response.json()
+                coordinates = item_data["geometry"]["coordinates"]
+
             request_body = {
                 "aoi": [
                     {
@@ -524,7 +611,7 @@ def quote(
                             {"key": "delivery_method", "value": "on_the_flow"},
                             {"key": "fullStrip", "value": "false"},
                             {"key": "image_format", "value": "dimap_geotiff"},
-                            {"key": "licence", "value": "standard"},
+                            {"key": "licence", "value": licence.airbus_value},
                             {"key": "pixel_coding", "value": "12bits"},
                             {"key": "priority", "value": "standard"},
                             {"key": "processing_level", "value": "primary"},

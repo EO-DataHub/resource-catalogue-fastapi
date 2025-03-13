@@ -296,6 +296,7 @@ def execute_order_workflow(
     product_bundle: str,
     coordinates: list,
     end_users: Optional[List],
+    licence: Optional[str],
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
@@ -315,12 +316,16 @@ def execute_order_workflow(
             "stac_key": stac_uri,
         }
     }
+    # Optional inputs that must exist in some form
     if coordinates:
         payload["inputs"]["coordinates"] = str(coordinates)
     else:
         payload["inputs"]["coordinates"] = "[]"
+    # Airbus specific. Should be enforced already.
     if end_users is not None:
         payload["inputs"]["end_users"] = json.dumps(end_users)
+    if licence:
+        payload["inputs"]["licence"] = licence
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 
