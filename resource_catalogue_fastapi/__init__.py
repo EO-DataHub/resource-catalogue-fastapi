@@ -66,6 +66,8 @@ AIRBUS_ENV = os.getenv("AIRBUS_ENV", "prod")
 airbus_client = AirbusClient(AIRBUS_ENV)
 planet_client = PlanetClient()
 
+PLANET_COLLECTIONS = os.getenv("PLANET_COLLECTIONS", "PSScene,SkySatCollect").split(",")
+
 app = FastAPI(
     title="EODHP Resource Catalogue Manager",
     description=(
@@ -114,9 +116,27 @@ def ensure_user_logged_in(request: Request):
             raise HTTPException(status_code=404)
 
 
-class OrderableCatalogEnum(str, Enum):
+class OrderableCatalog(str, Enum):
     planet = "planet"
     airbus = "airbus"
+
+
+OrderablePlanetCollection = Enum(
+    "OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS}
+)
+
+
+class OrderableAirbusCollection(str, Enum):
+    sar = "airbus_sar_data"
+    pneo = "airbus_pneo_data"
+    phr = "airbus_phr_data"
+    spot = "airbus_spot_data"
+
+
+# Combine the members of OrderableAirbusCollection and OrderablePlanetCollection
+combined_collections = {e.name: e.value for e in OrderableAirbusCollection}
+combined_collections.update({e.name: e.value for e in OrderablePlanetCollection})
+OrderableCollection = Enum("OrderableCollection", combined_collections)
 
 
 class EndUser(BaseModel):
@@ -136,7 +156,12 @@ class LicenceRadar(str, Enum):
 
     @property
     def airbus_value(self):
-        return self.value
+        mappings = {
+            "Single User Licence": "Single User License",
+            "Multi User (2 - 5) Licence": "Multi User (2 - 5) License",
+            "Multi User (6 - 30) Licence": "Multi User (6 - 30) License",
+        }
+        return mappings[self.value]
 
 
 class LicenceOptical(str, Enum):
@@ -182,7 +207,7 @@ class QuoteRequest(BaseModel):
 
 
 def validate_licence(collection: str, licence: str):
-    if collection == "airbus_sar_data":
+    if collection == OrderableAirbusCollection.sar.value:
         allowed_licences = {e.value for e in LicenceRadar}
         if not licence:
             raise HTTPException(
@@ -196,7 +221,7 @@ def validate_licence(collection: str, licence: str):
             )
         return LicenceRadar(licence)
 
-    elif collection in ["airbus_pneo_data", "airbus_phr_data", "airbus_spot_data"]:
+    elif collection in {e.value for e in OrderableAirbusCollection}:
         allowed_licences = {e.value for e in LicenceOptical}
         if not licence:
             raise HTTPException(
@@ -392,8 +417,8 @@ async def update_item(
 )
 async def order_item(
     request: Request,
-    catalog: OrderableCatalogEnum,
-    collection: str,
+    catalog: OrderableCatalog,
+    collection: OrderableCollection,
     item: str,
     order_request: Annotated[
         OrderRequest,
@@ -419,7 +444,7 @@ async def order_item(
     * endUserCountry: (Optional) A country code corresponding to the country of the end user
     * licence: (Airbus-only) The licence type for the order"""
 
-    licence = validate_licence(collection, order_request.licence)
+    licence = validate_licence(collection.value, order_request.licence)
 
     username, workspaces = get_user_details(request)
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
@@ -433,18 +458,20 @@ async def order_item(
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
     added_keys, stac_item_key, item_data = upload_stac_hierarchy_for_order(
-        base_item_url, catalog, collection, item, workspace
+        base_item_url, catalog.value, collection.value, item, workspace
     )
 
     # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders
-    optical_collections = ["airbus_pneo_data", "airbus_phr_data", "airbus_spot_data"]
+    optical_collections = {
+        e.value for e in OrderableAirbusCollection if e != OrderableAirbusCollection.sar
+    }
     end_users = None
-    if collection in optical_collections:
+    if collection.value in optical_collections:
         end_users = []
         if country_code := order_request.endUserCountry:
             airbus_client.validate_country_code(country_code)
             end_users = [{"endUserName": username, "country": country_code}]
-    if collection == "airbus_pneo_data" and not end_users:
+    if collection.value == OrderableAirbusCollection.pneo.value and not end_users:
         raise HTTPException(
             status_code=400,
             detail="End users must be supplied for PNEO orders",
@@ -460,10 +487,10 @@ async def order_item(
         "source": workspace,
         "target": f"user-datasets/{workspace}",
     }
-    if collection == "airbus_sar_data":
+    if collection.value == OrderableAirbusCollection.sar.value:
         adaptor_name = "airbus-sar-adaptor"
         commercial_data_bucket = "commercial-data-airbus"
-    elif catalog == "airbus":
+    elif collection.value in optical_collections:
         adaptor_name = "airbus-optical-adaptor"
         commercial_data_bucket = "airbus-commercial-data"
     else:
@@ -472,7 +499,7 @@ async def order_item(
 
     try:
         ades_response = execute_order_workflow(
-            catalog,
+            catalog.value,
             workspace,
             adaptor_name,
             authorization,
@@ -496,7 +523,7 @@ async def order_item(
 
     location_url = (
         f"{EODH_DOMAIN}/api/catalogue/user/catalogs/{workspace}/catalogs/commercial-data/"
-        f"catalogs/{catalog}/collections/{collection}/items/{item}"
+        f"catalogs/{catalog.value}/collections/{collection.value}/items/{item}"
     )
 
     return JSONResponse(content=item_data, status_code=201, headers={"Location": location_url})
@@ -510,8 +537,8 @@ async def order_item(
 )
 def quote(
     request: Request,
-    catalog: OrderableCatalogEnum,
-    collection: str,
+    catalog: OrderableCatalog,
+    collection: OrderableCollection,
     acquisition_id: str,
     body: Annotated[
         QuoteRequest,
@@ -539,19 +566,19 @@ def quote(
     """
 
     coordinates = body.coordinates
-    licence = validate_licence(collection, body.licence)
+    licence = validate_licence(collection.value, body.licence)
 
-    if catalog == "airbus":
-        if collection == "airbus_sar_data":
+    if catalog.value == OrderableCatalog.airbus.value:
+        if collection.value == OrderableAirbusCollection.sar.value:
             if AIRBUS_ENV == "prod":
                 url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
             else:
                 url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
             request_body = {"acquisitions": [acquisition_id], "orderTemplate": licence.airbus_value}
-        else:
+        elif collection.value in {e.value for e in OrderableAirbusCollection}:
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             spectral_processing = "bundle"
-            if collection == "airbus_pneo_data":
+            if collection.value == OrderableAirbusCollection.pneo.value:
                 product_type = "PleiadesNeoArchiveMono"
                 contract_id = "CTR24005241"
                 item_uuids = body.itemUuids
@@ -559,21 +586,16 @@ def quote(
                 if len(item_uuids) > 1:
                     product_type = "PleiadesNeoArchiveMulti"
                     spectral_processing = "full_bundle"
-            elif collection == "airbus_phr_data":
+            elif collection.value == OrderableAirbusCollection.phr.value:
                 product_type = "PleiadesArchiveMono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
                 item_id = acquisition_id
-            elif collection == "airbus_spot_data":
+            elif collection.value == OrderableAirbusCollection.spot.value:
                 product_type = "SPOTArchive1.5Mono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
                 item_id = acquisition_id
-            else:
-                return JSONResponse(
-                    status_code=404,
-                    content={"detail": f"Collection {collection} not recognised"},
-                )
             if not coordinates:
                 order_url = str(request.url)
                 base_item_url = order_url.rsplit("/quote", 1)[0]
@@ -634,8 +656,13 @@ def quote(
 
             if item_id:
                 request_body["items"][0]["datastripIds"] = [item_id]
-
-        # username, _ = get_user_details(request)
+        else:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "detail": f"Collection {collection.value} not recognised as an Airbus collection"
+                },
+            )
         access_token = airbus_client.generate_access_token()
         if not access_token:
             return JSONResponse(
@@ -650,7 +677,7 @@ def quote(
             return JSONResponse(status_code=500, content={"detail": str(e)})
 
         price_json = {}
-        if collection == "airbus_sar_data":
+        if collection.value == OrderableAirbusCollection.sar.value:
             for item in response_body:
                 if item.get("acquisitionId") == acquisition_id:
                     price_json = {
@@ -671,11 +698,11 @@ def quote(
             status_code=404, content={"detail": "Quote not found for given acquisition ID"}
         )
 
-    elif catalog == "planet":
+    elif catalog.value == OrderableCatalog.planet.value:
         try:
-            area = planet_client.get_area_estimate(acquisition_id, collection, coordinates)
+            area = planet_client.get_area_estimate(acquisition_id, collection.value, coordinates)
 
-            if collection.lower() == "skysatscene" and area < 3:
+            if collection.value == "SkySatScene" and area < 3:
                 # SkySatScene has a minimum order size of 3 km2
                 area = 3
 
@@ -686,7 +713,7 @@ def quote(
 
     else:
         return JSONResponse(
-            content={"message:" f"{catalog} not recognised"},
+            content={"message:" f"{catalog.value} not recognised"},
             status_code=404,
         )
 
