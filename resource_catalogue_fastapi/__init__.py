@@ -162,7 +162,7 @@ class ProductBundle(str, Enum):
 
 
 class ProductBundleRadar(str, Enum):
-    SCC = "SCC"
+    SSC = "SSC"
     MGD = "MGD"
     GEC = "GEC"
     EEC = "EEC"
@@ -312,36 +312,36 @@ def validate_radar_options(
             status_code=400,
             detail="Orbit is required for a radar item.",
         )
-    if product_bundle != ProductBundleRadar.SCC.value and not radar_options.resolutionVariant:
+    if product_bundle != ProductBundleRadar.SSC.value and not radar_options.resolutionVariant:
         raise HTTPException(
             status_code=400,
-            detail="Resolution variant is required for a radar item when the product bundle is not SCC.",
+            detail="Resolution variant is required for a radar item when the product bundle is not SSC.",
         )
-    if product_bundle == ProductBundleRadar.SCC.value and radar_options.resolutionVariant:
+    if product_bundle == ProductBundleRadar.SSC.value and radar_options.resolutionVariant:
         raise HTTPException(
             status_code=400,
             detail=(
                 "Resolution variant should not be provided for a radar item when the product "
-                "bundle is SCC."
+                "bundle is SSC."
             ),
         )
     if (
-        product_bundle not in [ProductBundleRadar.SCC.value, ProductBundleRadar.MGD.value]
+        product_bundle not in [ProductBundleRadar.SSC.value, ProductBundleRadar.MGD.value]
         and not radar_options.projection
     ):
         raise HTTPException(
             status_code=400,
-            detail="Projection is required for a radar item when the product bundle is not SCC or MGD.",
+            detail="Projection is required for a radar item when the product bundle is not SSC or MGD.",
         )
     if (
-        product_bundle in [ProductBundleRadar.SCC.value, ProductBundleRadar.MGD.value]
+        product_bundle in [ProductBundleRadar.SSC.value, ProductBundleRadar.MGD.value]
         and radar_options.projection
     ):
         raise HTTPException(
             status_code=400,
             detail=(
                 "Projection should not be provided for a radar item when the product bundle is "
-                "SCC or MGD."
+                "SSC or MGD."
             ),
         )
     return radar_options.model_dump()
@@ -608,8 +608,8 @@ async def order_item(
     * licence: (Airbus only) The licence type for the order
     * radarOptions: (Airbus SAR-only) The radar options for the order.
         * orbit: The orbit type for the order
-        * resolutionVariant: The resolution variant for the order (Not required for SCC product bundle)
-        * projection: The projection for the order (Not required for SCC or MGD product bundles)
+        * resolutionVariant: The resolution variant for the order (Not required for SSC product bundle)
+        * projection: The projection for the order (Not required for SSC or MGD product bundles)
     """
 
     licence = validate_licence(collection.value, order_request.licence)
