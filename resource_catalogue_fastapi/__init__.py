@@ -157,7 +157,7 @@ class ProductBundle(str, Enum):
 
 
 class ProductBundleRadar(str, Enum):
-    SSC = "SSC"
+    SCC = "SCC"
     MGD = "MGD"
     GEC = "GEC"
     EEC = "EEC"
@@ -205,11 +205,34 @@ class LicenceOptical(str, Enum):
         return mappings[self.value]
 
 
+class Orbit(str, Enum):
+    RAPID = "rapid"
+    SCIENCE = "science"
+
+
+class ResolutionVariant(str, Enum):
+    RE = "RE"
+    SE = "SE"
+
+
+class Projection(str, Enum):
+    AUTO = "Auto"
+    UTM = "UTM"
+    UPS = "UPS"
+
+
+class RadarOptions(BaseModel):
+    orbit: Orbit
+    resolutionVariant: ResolutionVariant
+    projection: Projection
+
+
 class OrderRequest(BaseModel):
     productBundle: Union[ProductBundle, ProductBundleRadar]
     coordinates: Optional[list] = Field(default_factory=list)
     endUserCountry: Optional[str] = None
     licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
+    radarOptions: Optional[RadarOptions] = None
 
 
 class QuoteRequest(BaseModel):
@@ -267,6 +290,56 @@ def validate_product_bundle(collection: str, product_bundle: str):
             detail=f"Invalid product bundle. Valid bundles are: {allowed_bundles}",
         )
     return ProductBundle(product_bundle)
+
+
+def validate_radar_options(
+    collection: str, radar_options: Optional[RadarOptions], product_bundle: str
+):
+    if collection != OrderableAirbusCollection.sar.value:
+        return None
+    if not radar_options:
+        raise HTTPException(
+            status_code=400,
+            detail="Radar options missing for a radar item.",
+        )
+    if not radar_options.orbit:
+        raise HTTPException(
+            status_code=400,
+            detail="Orbit is required for a radar item.",
+        )
+    if product_bundle != ProductBundleRadar.SCC.value and not radar_options.resolutionVariant:
+        raise HTTPException(
+            status_code=400,
+            detail="Resolution variant is required for a radar item when the product bundle is not SCC.",
+        )
+    if product_bundle == ProductBundleRadar.SCC.value and radar_options.resolutionVariant:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Resolution variant should not be provided for a radar item when the product "
+                "bundle is SCC."
+            ),
+        )
+    if (
+        product_bundle not in [ProductBundleRadar.SCC.value, ProductBundleRadar.MGD.value]
+        and not radar_options.projection
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Projection is required for a radar item when the product bundle is not SCC or MGD.",
+        )
+    if (
+        product_bundle in [ProductBundleRadar.SCC.value, ProductBundleRadar.MGD.value]
+        and radar_options.projection
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Projection should not be provided for a radar item when the product bundle is "
+                "SCC or MGD."
+            ),
+        )
+    return radar_options.model_dump()
 
 
 class QuoteResponse(BaseModel):
@@ -458,9 +531,22 @@ async def order_item(
             examples=[
                 {
                     "productBundle": "General use",
+                },
+                {
+                    "productBundle": "Analytic",
                     "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
                     "endUserCountry": "GB",
                     "licence": "Standard",
+                },
+                {
+                    "productBundle": "GEC",
+                    "endUserCountry": "GB",
+                    "licence": "Single User Licence",
+                    "radarOptions": {
+                        "orbit": "rapid",
+                        "resolutionVariant": "RE",
+                        "projection": "Auto",
+                    },
                 },
             ]
         ),
@@ -474,10 +560,18 @@ async def order_item(
     * coordinates: (Optional) Coordinates of a polygon to limit the AOI of the item for purchase where
       possible. Given in the same nested format as STAC
     * endUserCountry: (Optional) A country code corresponding to the country of the end user
-    * licence: (Airbus-only) The licence type for the order"""
+    * licence: (Airbus only) The licence type for the order
+    * radarOptions: (Airbus SAR-only) The radar options for the order.
+        * orbit: The orbit type for the order
+        * resolutionVariant: The resolution variant for the order (Not required for SCC product bundle)
+        * projection: The projection for the order (Not required for SCC or MGD product bundles)
+    """
 
     licence = validate_licence(collection.value, order_request.licence)
     product_bundle = validate_product_bundle(collection.value, order_request.productBundle)
+    radar_options = validate_radar_options(
+        collection.value, order_request.radarOptions, product_bundle.value
+    )
 
     username, workspaces = get_user_details(request)
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
@@ -542,6 +636,7 @@ async def order_item(
             order_request.coordinates,
             end_users,
             licence.airbus_value,
+            radar_options,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
