@@ -30,7 +30,7 @@ from .utils import (
 )
 
 logging.basicConfig(
-    level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s %(levelname)s %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[logging.StreamHandler()],
@@ -216,7 +216,6 @@ class QuoteRequest(BaseModel):
     """Request body for quote endpoint"""
 
     coordinates: list = None
-    itemUuids: list = []
     licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
 
 
@@ -579,10 +578,8 @@ def quote(
         Body(
             examples=[
                 {
-                    "coordinates": [[[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5]]],
-                    "itemUuids": [
-                        "12345678-1234-1234-1234-123456789012",
-                        "87654321-4321-4321-4321-210987654321",
+                    "coordinates": [
+                        [[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]
                     ],
                     "licence": "Standard",
                 }
@@ -602,6 +599,10 @@ def quote(
     coordinates = body.coordinates
     licence = validate_licence(collection.value, body.licence)
 
+    order_url = str(request.url)
+    base_item_url = order_url.rsplit("/quote", 1)[0]
+    item_data = None
+
     if catalog.value == OrderableCatalog.airbus.value:
         if collection.value == OrderableAirbusCollection.sar.value:
             if AIRBUS_ENV == "prod":
@@ -613,13 +614,27 @@ def quote(
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             spectral_processing = "bundle"
             if collection.value == OrderableAirbusCollection.pneo.value:
+                # Check if item is part of a multi order
+                item_response = requests.get(base_item_url)
+                item_response.raise_for_status()
+                item_data = item_response.json()
+
                 product_type = "PleiadesNeoArchiveMono"
                 contract_id = "CTR24005241"
-                item_uuids = body.itemUuids
                 item_id = None
-                if len(item_uuids) > 1:
+                item_uuids = [item_data.get("properties", {}).get("id")]
+                if multi_ids := item_data.get("properties", {}).get(
+                    "composed_of_acquisition_identifiers"
+                ):
+                    item_uuids = []
                     product_type = "PleiadesNeoArchiveMulti"
                     spectral_processing = "full_bundle"
+                    for multi_id in multi_ids:
+                        multi_url = f"{base_item_url}/../{multi_id}"
+                        multi_response = requests.get(multi_url)
+                        multi_response.raise_for_status()
+                        multi_data = multi_response.json()
+                        item_uuids.append(multi_data.get("properties", {}).get("id"))
             elif collection.value == OrderableAirbusCollection.phr.value:
                 product_type = "PleiadesArchiveMono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
@@ -631,13 +646,11 @@ def quote(
                 item_uuids = None
                 item_id = acquisition_id
             if not coordinates:
-                order_url = str(request.url)
-                base_item_url = order_url.rsplit("/quote", 1)[0]
-
                 # Fetch coordinates from the STAC item
-                item_response = requests.get(base_item_url)
-                item_response.raise_for_status()
-                item_data = item_response.json()
+                if not item_data:
+                    item_response = requests.get(base_item_url)
+                    item_response.raise_for_status()
+                    item_data = item_response.json()
                 coordinates = item_data["geometry"]["coordinates"]
 
             request_body = {
