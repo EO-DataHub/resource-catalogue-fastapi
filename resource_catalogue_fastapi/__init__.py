@@ -116,6 +116,11 @@ def ensure_user_logged_in(request: Request):
             raise HTTPException(status_code=404)
 
 
+class ParentCatalog(str, Enum):
+    supported_datasets = "supported-datasets"
+    commercial = "commercial"
+
+
 class OrderableCatalog(str, Enum):
     planet = "planet"
     airbus = "airbus"
@@ -512,16 +517,56 @@ async def update_item(
 
 
 @app.post(
-    "/stac/catalogs/commercial/catalogs/{catalog}/collections/{collection}/items/{item}/order",
+    "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item}/order",
     dependencies=[Depends(workspace_access_dependency)],
     responses={
-        200: {
-            "content": {"application/json": {"example": {"message": "Item ordered successfully"}}}
-        }
+        201: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "type": "Feature",
+                        "stac_version": "1.0.0",
+                        "stac_extensions": [
+                            "https://stac-extensions.github.io/order/v1.1.0/schema.json"
+                        ],
+                        "id": "example-item",
+                        "properties": {
+                            "datetime": "2023-01-01T00:00:00Z",
+                            "order.status": "Pending",
+                            "created": "2025-01-01T00:00:00Z",
+                            "updated": "2025-01-01T00:00:00Z",
+                            "order_options": {
+                                "productBundle": "Analytic",
+                                "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+                                "endUser": {"country": "GB", "endUserName": "example-user"},
+                                "licence": "Standard",
+                                "radarOptions": {
+                                    "orbit": "rapid",
+                                    "resolutionVariant": "RE",
+                                    "projection": "Auto",
+                                },
+                            },
+                        },
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+                        },
+                        "links": [],
+                        "assets": {},
+                    }
+                }
+            },
+            "headers": {"Location": {"description": "URL of the created resource"}},
+        },
+        400: {"description": "Bad Request"},
+        403: {"description": "Access Denied"},
+        404: {"description": "Not Found"},
+        500: {"description": "Internal Server Error"},
     },
 )
 async def order_item(
     request: Request,
+    parent_catalog: ParentCatalog,
     catalog: OrderableCatalog,
     collection: OrderableCollection,
     item: str,
@@ -665,13 +710,14 @@ async def order_item(
 
 
 @app.post(
-    "/stac/catalogs/commercial/catalogs/{catalog}/collections/{collection}/items/{acquisition_id}/quote",
+    "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{acquisition_id}/quote",
     response_model=QuoteResponse,
     responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
     dependencies=[Depends(ensure_user_logged_in)],
 )
 def quote(
     request: Request,
+    parent_catalog: ParentCatalog,
     catalog: OrderableCatalog,
     collection: OrderableCollection,
     acquisition_id: str,
