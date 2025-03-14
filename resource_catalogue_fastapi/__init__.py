@@ -30,7 +30,7 @@ from .utils import (
 )
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[logging.StreamHandler()],
