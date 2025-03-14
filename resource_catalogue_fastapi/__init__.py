@@ -652,7 +652,7 @@ async def order_item(
         "licence": licence.airbus_value if licence else None,
     }
     added_keys, stac_item_key, item_data = upload_stac_hierarchy_for_order(
-        base_item_url, catalog.value, collection.value, item, workspace, order_options
+        base_item_url, catalog.value, collection.value, item, workspace, order_options, S3_BUCKET
     )
 
     # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders

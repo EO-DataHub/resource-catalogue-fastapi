@@ -193,6 +193,7 @@ def upload_stac_hierarchy_for_order(
     item_id: str,
     workspace: str,
     order_options: dict,
+    bucket: str,
 ):
     """Upload an item and its associated collection and catalog to the workspace to track an order"""
     collection_description = (
@@ -262,17 +263,17 @@ def upload_stac_hierarchy_for_order(
     added_keys = [catalog_key, collection_key, item_key]
     upload_file_s3(
         body=json.dumps(catalog_data),
-        bucket=workspace,
+        bucket=bucket,
         key=catalog_key,
     )
     upload_file_s3(
         body=json.dumps(collection_data),
-        bucket=workspace,
+        bucket=bucket,
         key=collection_key,
     )
     upload_file_s3(
         body=json.dumps(item_data),
-        bucket=workspace,
+        bucket=bucket,
         key=item_key,
     )
 
