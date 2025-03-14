@@ -3,7 +3,9 @@ import logging
 import os
 import time
 import urllib.request
+from datetime import datetime, timezone
 from distutils.util import strtobool
+from enum import Enum
 from typing import List, Optional
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -17,13 +19,31 @@ from fastapi import Depends, HTTPException, Request
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ADES_URL = os.getenv("ADES_URL")
-AIRBUS_API_KEY = os.getenv("AIRBUS_API_KEY")
 WORKSPACES_CLAIM_PATH = os.getenv("WORKSPACES_CLAIM_PATH", "workspaces")
+
+
+class OrderStatus(Enum):
+    ORDERABLE = "orderable"
+    ORDERED = "ordered"
+    PENDING = "pending"
+    SHIPPING = "shipping"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELED = "canceled"
 
 
 def get_path_params(request: Request):
     logger.debug("CALCULATING PATH PARAMETERS")
     return request.scope.get("path_params", {})
+
+
+async def get_body_params(request: Request) -> Optional[dict]:
+    try:
+        body = await request.json()
+        return body
+    except Exception as e:
+        logger.error(f"Error parsing request body: {e}")
+        return None
 
 
 def get_nested_value(data: dict, path: str, default=None):
@@ -57,7 +77,7 @@ def get_user_details(request: Request) -> tuple:
     return username, workspaces
 
 
-def validate_workspace_access(
+async def validate_workspace_access(
     request: Request,
     path_params: dict,
 ) -> bool:
@@ -69,6 +89,13 @@ def validate_workspace_access(
     logger.info("Workspaces: %s", workspaces)
 
     if not (workspace := path_params.get("workspace")):
+        body_params = await get_body_params(request)
+        logger.debug(f"Checking body params for workspace: {body_params}")
+        if body_params:
+            workspace = body_params.get("workspace")
+
+    if not workspace:
+        logger.info("No workspace found in the request")
         return False
 
     logger.info(f"Workspace: {workspace}")
@@ -159,14 +186,108 @@ def get_nested_files_from_url(url: str) -> list:
     return files_to_add
 
 
-def update_stac_order_status(stac_item: dict, item_id: str, order_status: str):
+def upload_stac_hierarchy_for_order(
+    base_item_url: str,
+    catalog_id: str,
+    collection_id: str,
+    item_id: str,
+    workspace: str,
+    order_options: dict,
+    bucket: str,
+):
+    """Upload an item and its associated collection and catalog to the workspace to track an order"""
+    collection_description = (
+        f"Purchased {collection_id.capitalize().replace('_', ' ')}, including both "
+        f"completed purchases and ongoing order records"
+    )
+    catalog_description = (
+        f"Purchased {catalog_id.capitalize()} data, including both completed purchases "
+        f"and ongoing order records"
+    )
+
+    # Fetch the STAC item
+    item_response = requests.get(base_item_url)
+    item_response.raise_for_status()
+    item_data = item_response.json()
+
+    update_stac_order_status(item_data, None, OrderStatus.PENDING.value)
+    item_data["assets"] = {}
+
+    item_data["properties"]["order_options"] = order_options
+
+    current_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    item_data["properties"]["created"] = current_time
+    item_data["properties"]["updated"] = current_time
+
+    # Fetch the STAC collection URL from the item links
+    collection_url = None
+    for link in item_data.get("links", []):
+        if link.get("rel") == "collection":
+            collection_url = link.get("href")
+            break
+    if not collection_url:
+        raise ValueError("Collection URL not found in item links")
+
+    collection_response = requests.get(collection_url)
+    collection_response.raise_for_status()
+    collection_data = collection_response.json()
+
+    # Modify the description of the STAC collection
+    collection_data["description"] = collection_description
+
+    # Fetch the STAC catalog URL from the item links
+    catalog_url = None
+    for link in collection_data.get("links", []):
+        if link.get("rel") == "parent":
+            catalog_url = link.get("href")
+            break
+    if not catalog_url:
+        raise ValueError("Collection URL not found in item links")
+
+    catalog_response = requests.get(catalog_url)
+    catalog_response.raise_for_status()
+    catalog_data = catalog_response.json()
+
+    # Modify the description of the STAC catalog
+    catalog_data["description"] = catalog_description
+
+    catalog_data["links"] = []
+    collection_data["links"] = []
+    item_data["links"] = []
+
+    # Upload the STAC catalog, collection and item to the workspace
+    catalog_name = "commercial-data"
+    catalog_key = f"{workspace}/{catalog_name}/{catalog_id}.json"
+    collection_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}.json"
+    item_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}/{item_id}.json"
+    added_keys = [catalog_key, collection_key, item_key]
+    upload_file_s3(
+        body=json.dumps(catalog_data),
+        bucket=bucket,
+        key=catalog_key,
+    )
+    upload_file_s3(
+        body=json.dumps(collection_data),
+        bucket=bucket,
+        key=collection_key,
+    )
+    upload_file_s3(
+        body=json.dumps(item_data),
+        bucket=bucket,
+        key=item_key,
+    )
+
+    return added_keys, item_key, item_data
+
+
+def update_stac_order_status(stac_item: dict, order_id: str, order_status: str):
     """Update the STAC item with the order status using the STAC Order extension"""
     # Update or add fields relating to the order
     if "properties" not in stac_item:
         stac_item["properties"] = {}
 
-    if item_id is not None:
-        stac_item["properties"]["order.id"] = item_id
+    if order_id is not None:
+        stac_item["properties"]["order.id"] = order_id
     stac_item["properties"]["order.status"] = order_status
 
     # Update or add the STAC extension if not already present
@@ -188,6 +309,7 @@ def execute_order_workflow(
     product_bundle: str,
     coordinates: list,
     end_users: Optional[List],
+    licence: Optional[str],
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
@@ -207,56 +329,22 @@ def execute_order_workflow(
             "stac_key": stac_uri,
         }
     }
+    # Optional inputs that must exist in some form
     if coordinates:
         payload["inputs"]["coordinates"] = str(coordinates)
     else:
         payload["inputs"]["coordinates"] = "[]"
+    # Airbus specific. Should be enforced already.
     if end_users is not None:
         payload["inputs"]["end_users"] = json.dumps(end_users)
+    if licence:
+        payload["inputs"]["licence"] = licence
 
     logger.info(f"Sending request to {url} with payload: {payload}")
+
+    # TODO: Remove
+    raise NotImplementedError("Sending of request is halted for debugging purposes")
 
     response = requests.post(url, headers=headers, json=payload)
     response.raise_for_status()
     return response.json()
-
-
-def generate_airbus_access_token(env: str = "dev") -> str:
-    """Generate access token for Airbus API"""
-    if env == "prod":
-        url = "https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token"
-    else:
-        url = "https://authenticate-int.idp.private.geoapi-airbusds.com/auth/realms/IDP/protocol/openid-connect/token"
-
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-    }
-
-    data = [
-        ("apikey", AIRBUS_API_KEY),
-        ("grant_type", "api_key"),
-        ("client_id", "IDP"),
-    ]
-
-    response = requests.post(url, headers=headers, data=data)
-
-    return response.json().get("access_token")
-
-
-def validate_country_code(country_code: str):
-    """Ensure that a given country code is valid against current Airbus API"""
-    url = "https://order.api.oneatlas.airbus.com/api/v1/properties"
-    access_token = generate_airbus_access_token("prod")
-    headers = {"Authorization": f"Bearer {access_token}"}
-    properties_response = requests.get(url, headers=headers)
-    properties = properties_response.json().get("properties")
-
-    countries = next((prop["values"] for prop in properties if prop["key"] == "countries"), [])
-    country_ids = [country["id"] for country in countries]
-
-    if country_code not in country_ids:
-        valid_codes = ", ".join(country_ids)
-        raise HTTPException(
-            status_code=400,
-            detail=f"End user country code {country_code} is invalid. Valid codes are: {valid_codes}",
-        )
