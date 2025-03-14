@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import urllib.request
+from datetime import datetime, timezone
 from distutils.util import strtobool
 from enum import Enum
 from typing import List, Optional
@@ -212,6 +213,10 @@ def upload_stac_hierarchy_for_order(
     item_data["assets"] = {}
 
     item_data["properties"]["order_options"] = order_options
+
+    current_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    item_data["properties"]["created"] = current_time
+    item_data["properties"]["updated"] = current_time
 
     # Fetch the STAC collection URL from the item links
     collection_url = None
