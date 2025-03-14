@@ -309,7 +309,6 @@ def execute_order_workflow(
     coordinates: list,
     end_users: Optional[List],
     licence: Optional[str],
-    radar_options: Optional[dict],
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
@@ -339,8 +338,6 @@ def execute_order_workflow(
         payload["inputs"]["end_users"] = json.dumps(end_users)
     if licence:
         payload["inputs"]["licence"] = licence
-    if radar_options:
-        payload["inputs"]["radar_options"] = json.dumps(radar_options)
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 

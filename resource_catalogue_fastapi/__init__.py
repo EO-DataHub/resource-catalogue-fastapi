@@ -225,11 +225,25 @@ class Projection(str, Enum):
     UTM = "UTM"
     UPS = "UPS"
 
+    @property
+    def airbus_value(self):
+        mappings = {
+            "Auto": "auto",
+            "UTM": "UTM",
+            "UPS": "UPS",
+        }
+        return mappings[self.value]
+
 
 class RadarOptions(BaseModel):
     orbit: Orbit
     resolutionVariant: ResolutionVariant
     projection: Projection
+
+    def model_dump(self):
+        data = super().model_dump()
+        data["projection"] = self.projection.airbus_value
+        return data
 
 
 class OrderRequest(BaseModel):
@@ -344,7 +358,9 @@ def validate_radar_options(
                 "SSC or MGD."
             ),
         )
-    return radar_options.model_dump()
+    radar_bundle = radar_options.model_dump()
+    radar_bundle["product_type"] = product_bundle
+    return radar_bundle
 
 
 class QuoteResponse(BaseModel):
@@ -630,11 +646,10 @@ async def order_item(
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
     order_options = {
-        "productBundle": product_bundle.value,
+        "productBundle": radar_options if radar_options else product_bundle.value,
         "coordinates": order_request.coordinates if order_request.coordinates else None,
         "endUser": {"country": order_request.endUserCountry, "endUserName": username},
         "licence": licence.airbus_value if licence else None,
-        "radarOptions": radar_options,
     }
     added_keys, stac_item_key, item_data = upload_stac_hierarchy_for_order(
         base_item_url, catalog.value, collection.value, item, workspace, order_options
@@ -676,6 +691,9 @@ async def order_item(
         adaptor_name = "planet-adaptor"
         commercial_data_bucket = S3_BUCKET
 
+    product_bundle_value = product_bundle.value
+    if radar_options:
+        product_bundle_value = json.dumps(radar_options)
     try:
         ades_response = execute_order_workflow(
             catalog.value,
@@ -684,11 +702,10 @@ async def order_item(
             authorization,
             f"s3://{S3_BUCKET}/{stac_item_key}",
             commercial_data_bucket,
-            product_bundle.value,
+            product_bundle_value,
             order_request.coordinates,
             end_users,
             licence.airbus_value,
-            radar_options,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
