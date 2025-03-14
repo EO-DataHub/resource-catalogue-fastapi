@@ -584,8 +584,15 @@ async def order_item(
 
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
+    order_options = {
+        "productBundle": product_bundle.value,
+        "coordinates": order_request.coordinates if order_request.coordinates else None,
+        "endUser": {"country": order_request.endUserCountry, "endUserName": username},
+        "licence": licence.airbus_value if licence else None,
+        "radarOptions": radar_options,
+    }
     added_keys, stac_item_key, item_data = upload_stac_hierarchy_for_order(
-        base_item_url, catalog.value, collection.value, item, workspace
+        base_item_url, catalog.value, collection.value, item, workspace, order_options
     )
 
     # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders

@@ -186,7 +186,12 @@ def get_nested_files_from_url(url: str) -> list:
 
 
 def upload_stac_hierarchy_for_order(
-    base_item_url: str, catalog_id: str, collection_id: str, item_id: str, workspace: str
+    base_item_url: str,
+    catalog_id: str,
+    collection_id: str,
+    item_id: str,
+    workspace: str,
+    order_options: dict,
 ):
     """Upload an item and its associated collection and catalog to the workspace to track an order"""
     collection_description = (
@@ -205,6 +210,8 @@ def upload_stac_hierarchy_for_order(
 
     update_stac_order_status(item_data, None, OrderStatus.PENDING.value)
     item_data["assets"] = {}
+
+    item_data["properties"]["order_options"] = order_options
 
     # Fetch the STAC collection URL from the item links
     collection_url = None
