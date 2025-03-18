@@ -897,11 +897,11 @@ def quote(
 
         price_json = {}
         if collection.value == OrderableAirbusCollection.sar.value:
-            for item in response_body:
-                if item.get("acquisitionId") == item:
+            for response_item in response_body:
+                if response_item.get("acquisitionId") == item:
                     price_json = {
-                        "units": item["price"]["currency"],
-                        "value": item["price"]["total"],
+                        "units": response_item["price"]["currency"],
+                        "value": response_item["price"]["total"],
                     }
                     break
         else:
