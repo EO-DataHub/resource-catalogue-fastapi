@@ -273,7 +273,19 @@ def upload_stac_hierarchy_for_order(
     catalog_key = f"{workspace}/{catalog_name}/{catalog_id}.json"
     collection_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}.json"
     item_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}/{item_id}.json"
-    added_keys = [catalog_key, collection_key, item_key]
+
+    transformed_catalog_key = (
+        f"transformed/user-datasets/{workspace}/catalogs/{catalog_name}/catalogs/{catalog_id}.json"
+    )
+    transformed_collection_key = (
+        f"transformed/user-datasets/{workspace}/catalogs/{catalog_name}/catalogs/{catalog_id}/"
+        f"collections/{collection_id}.json"
+    )
+    transformed_item_key = (
+        f"transformed/user-datasets/{workspace}/catalogs/{catalog_name}/catalogs/{catalog_id}/"
+        f"collections/{collection_id}/items/{item_id}.json"
+    )
+    added_keys = [transformed_catalog_key, transformed_collection_key, transformed_item_key]
     upload_file_s3(
         body=json.dumps(catalog_data),
         bucket=bucket,
@@ -288,6 +300,21 @@ def upload_stac_hierarchy_for_order(
         body=json.dumps(item_data),
         bucket=bucket,
         key=item_key,
+    )
+    upload_file_s3(
+        body=json.dumps(catalog_data),
+        bucket=bucket,
+        key=transformed_catalog_key,
+    )
+    upload_file_s3(
+        body=json.dumps(collection_data),
+        bucket=bucket,
+        key=transformed_collection_key,
+    )
+    upload_file_s3(
+        body=json.dumps(item_data),
+        bucket=bucket,
+        key=transformed_item_key,
     )
 
     return added_keys, item_key, item_data
