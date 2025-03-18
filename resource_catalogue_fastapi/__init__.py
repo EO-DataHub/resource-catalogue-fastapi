@@ -249,7 +249,9 @@ class RadarOptions(BaseModel):
 
     def model_dump(self):
         data = super().model_dump()
-        data["projection"] = self.projection.airbus_value
+        data = {k: v for k, v in data.items() if v is not None}
+        if self.projection:
+            data["projection"] = self.projection.airbus_value
         return data
 
 
