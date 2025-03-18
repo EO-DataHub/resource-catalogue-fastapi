@@ -727,7 +727,7 @@ async def order_item(
 
 
 @app.post(
-    "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{acquisition_id}/quote",
+    "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item_id}/quote",
     response_model=QuoteResponse,
     responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
     dependencies=[Depends(ensure_user_logged_in)],
@@ -737,7 +737,7 @@ def quote(
     parent_catalog: ParentCatalog,
     catalog: OrderableCatalog,
     collection: OrderableCollection,
-    acquisition_id: str,
+    item_id: str,
     body: Annotated[
         QuoteRequest,
         Body(
@@ -752,12 +752,10 @@ def quote(
         ),
     ],
 ):
-    """Return a quote for a Planet or Airbus acquisition ID within an EODH catalogue and collection.
+    """Return a quote for a Planet or Airbus item ID within an EODH catalogue and collection.
 
-    * coordinates: Coordinates to limit the AOI of the item for purchase where possible. Given in the
-      same nested format as STAC
-    * itemUuids: (Airbus-only) This is required for stereo and multi Pléiades Neo orders only, and
-      consists of a list of ids corresponding to individual mono items that are part of the order
+    * coordinates: (optional) Coordinates to limit the AOI of the item for purchase where possible.
+      Given in the same nested format as STAC
     * licence: (Airbus-only) The licence type for the order
     """
 
@@ -774,7 +772,7 @@ def quote(
                 url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
             else:
                 url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
-            request_body = {"acquisitions": [acquisition_id], "orderTemplate": licence.airbus_value}
+            request_body = {"acquisitions": [item_id], "orderTemplate": licence.airbus_value}
         elif collection.value in {e.value for e in OrderableAirbusCollection}:
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             spectral_processing = "bundle"
@@ -786,7 +784,7 @@ def quote(
 
                 product_type = "PleiadesNeoArchiveMono"
                 contract_id = "CTR24005241"
-                item_id = None
+                datastrip_id = None
                 item_uuids = [item_data.get("properties", {}).get("id")]
                 if multi_ids := item_data.get("properties", {}).get(
                     "composed_of_acquisition_identifiers"
@@ -804,12 +802,12 @@ def quote(
                 product_type = "PleiadesArchiveMono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
-                item_id = acquisition_id
+                datastrip_id = item_id
             elif collection.value == OrderableAirbusCollection.spot.value:
                 product_type = "SPOTArchive1.5Mono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
-                item_id = acquisition_id
+                datastrip_id = item_id
             if not coordinates:
                 # Fetch coordinates from the STAC item
                 if not item_data:
@@ -866,8 +864,8 @@ def quote(
                     data_source_ids.append({"catalogId": "PublicMOC", "catalogItemId": item_uuid})
                 request_body["items"][0]["dataSourceIds"] = data_source_ids
 
-            if item_id:
-                request_body["items"][0]["datastripIds"] = [item_id]
+            if datastrip_id:
+                request_body["items"][0]["datastripIds"] = [datastrip_id]
         else:
             return JSONResponse(
                 status_code=404,
@@ -891,7 +889,7 @@ def quote(
         price_json = {}
         if collection.value == OrderableAirbusCollection.sar.value:
             for item in response_body:
-                if item.get("acquisitionId") == acquisition_id:
+                if item.get("acquisitionId") == item_id:
                     price_json = {
                         "units": item["price"]["currency"],
                         "value": item["price"]["total"],
@@ -912,7 +910,7 @@ def quote(
 
     elif catalog.value == OrderableCatalog.planet.value:
         try:
-            area = planet_client.get_area_estimate(acquisition_id, collection.value, coordinates)
+            area = planet_client.get_area_estimate(item_id, collection.value, coordinates)
 
             if collection.value == "SkySatScene" and area < 3:
                 # SkySatScene has a minimum order size of 3 km2
