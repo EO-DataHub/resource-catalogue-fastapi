@@ -709,6 +709,8 @@ async def order_item(
             authorization,
             f"s3://{S3_BUCKET}/{stac_item_key}",
             commercial_data_bucket,
+            S3_BUCKET,
+            PULSAR_URL,
             product_bundle_value,
             order_request.coordinates,
             end_users,

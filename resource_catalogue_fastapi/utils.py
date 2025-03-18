@@ -319,6 +319,8 @@ def execute_order_workflow(
     authorization: str,
     stac_uri: str,
     commercial_data_bucket: str,
+    workspace_bucket: str,
+    pulsar_url: str,
     product_bundle: str,
     coordinates: list,
     end_users: Optional[List],
@@ -337,7 +339,9 @@ def execute_order_workflow(
     payload = {
         "inputs": {
             "workspace": user_workspace,
+            "workspace_bucket": workspace_bucket,
             "commercial_data_bucket": commercial_data_bucket,
+            "pulsar_url": pulsar_url,
             "product_bundle": product_bundle,
             "stac_key": stac_uri,
         }
