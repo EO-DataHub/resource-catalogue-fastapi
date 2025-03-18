@@ -16,6 +16,8 @@ from .airbus_client import AirbusClient
 from .planet_client import PlanetClient
 from .utils import (
     OrderStatus,
+    check_user_can_access_a_workspace,
+    check_user_can_access_requested_workspace,
     delete_file_s3,
     execute_order_workflow,
     get_file_from_url,
@@ -26,7 +28,6 @@ from .utils import (
     update_stac_order_status,
     upload_file_s3,
     upload_stac_hierarchy_for_order,
-    validate_workspace_access,
 )
 
 logging.basicConfig(
@@ -101,7 +102,13 @@ async def workspace_access_dependency(
     request: Request, path_params: dict = Depends(get_path_params)  # noqa: B008
 ):
     if ENABLE_OPA_POLICY_CHECK:
-        if not await validate_workspace_access(request, path_params):
+        if not await check_user_can_access_requested_workspace(request, path_params):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+
+def ensure_user_can_access_a_workspace(request: Request):
+    if ENABLE_OPA_POLICY_CHECK:
+        if not check_user_can_access_a_workspace(request):
             raise HTTPException(status_code=403, detail="Access denied")
 
 
@@ -534,7 +541,7 @@ async def update_item(
 
 @app.post(
     "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item}/order",
-    dependencies=[Depends(workspace_access_dependency)],
+    dependencies=[Depends(ensure_user_can_access_a_workspace)],
     responses={
         201: {
             "content": {

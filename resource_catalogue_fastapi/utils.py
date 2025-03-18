@@ -77,7 +77,7 @@ def get_user_details(request: Request) -> tuple:
     return username, workspaces
 
 
-async def validate_workspace_access(
+async def check_user_can_access_requested_workspace(
     request: Request,
     path_params: dict,
 ) -> bool:
@@ -102,6 +102,19 @@ async def validate_workspace_access(
     if workspace not in workspaces:
         return False
     return True
+
+
+def check_user_can_access_a_workspace(request: Request) -> bool:
+    """Check if the user has access to a workspace"""
+    username, workspaces = get_user_details(request)
+
+    # Add values for logs
+    logger.info("Logged in as user: %s", username)
+    logger.info("Workspaces: %s", workspaces)
+
+    if workspaces:
+        return True
+    return False
 
 
 last_deploy_times = {}
