@@ -244,8 +244,8 @@ class Projection(str, Enum):
 
 class RadarOptions(BaseModel):
     orbit: Orbit
-    resolutionVariant: ResolutionVariant
-    projection: Projection
+    resolutionVariant: Optional[ResolutionVariant] = None
+    projection: Optional[Projection] = None
 
     def model_dump(self):
         data = super().model_dump()
