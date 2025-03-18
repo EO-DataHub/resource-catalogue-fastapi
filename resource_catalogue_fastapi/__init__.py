@@ -93,7 +93,7 @@ def get_producer():
     global producer
     if producer is None:
         producer = pulsar_client.create_producer(
-            topic="harvested", producer_name="resource_catalogue_fastapi"
+            topic="transformed", producer_name="resource_catalogue_fastapi"
         )
     return producer
 
@@ -687,8 +687,8 @@ async def order_item(
         "added_keys": added_keys,
         "updated_keys": [],
         "deleted_keys": [],
-        "source": workspace,
-        "target": f"user-datasets/{workspace}",
+        "source": "/",
+        "target": "/",
     }
     if collection.value == OrderableAirbusCollection.sar.value:
         adaptor_name = "airbus-sar-adaptor"
