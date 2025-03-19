@@ -127,14 +127,14 @@ def ensure_user_logged_in(request: Request):
             raise HTTPException(status_code=404)
 
 
-class ParentCatalog(str, Enum):
+class ParentCatalogue(str, Enum):
     """Parent catalogue for commercial data in the resource catalogue"""
 
     supported_datasets = "supported-datasets"
     commercial = "commercial"
 
 
-class OrderableCatalog(str, Enum):
+class OrderableCatalogue(str, Enum):
     """Catalogues for ordering commercial data"""
 
     planet = "planet"
@@ -606,8 +606,8 @@ async def update_item(
 )
 async def order_item(
     request: Request,
-    parent_catalog: ParentCatalog,
-    catalog: OrderableCatalog,
+    parent_catalog: ParentCatalogue,
+    catalog: OrderableCatalogue,
     collection: OrderableCollection,
     item: str,
     order_request: Annotated[
@@ -773,8 +773,8 @@ async def order_item(
 )
 def quote(
     request: Request,
-    parent_catalog: ParentCatalog,
-    catalog: OrderableCatalog,
+    parent_catalog: ParentCatalogue,
+    catalog: OrderableCatalogue,
     collection: OrderableCollection,
     item: str,
     body: Annotated[
@@ -805,7 +805,7 @@ def quote(
     base_item_url = order_url.rsplit("/quote", 1)[0]
     item_data = None
 
-    if catalog.value == OrderableCatalog.airbus.value:
+    if catalog.value == OrderableCatalogue.airbus.value:
         if collection.value == OrderableAirbusCollection.sar.value:
             if AIRBUS_ENV == "prod":
                 url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
@@ -951,7 +951,7 @@ def quote(
             status_code=404, content={"detail": "Quote not found for given acquisition ID"}
         )
 
-    elif catalog.value == OrderableCatalog.planet.value:
+    elif catalog.value == OrderableCatalogue.planet.value:
         try:
             area = planet_client.get_area_estimate(item, collection.value, coordinates)
 

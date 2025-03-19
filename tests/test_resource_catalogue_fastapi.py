@@ -7,7 +7,7 @@ import requests
 from fastapi.testclient import TestClient
 
 from resource_catalogue_fastapi import (
-    OrderableCatalog,
+    OrderableCatalogue,
     OrderablePlanetCollection,
     QuoteRequest,
     app,
@@ -406,7 +406,7 @@ def test_quote_from_planet(requests_mock):
     response = quote(
         request,
         None,
-        OrderableCatalog("planet"),
+        OrderableCatalogue("planet"),
         OrderablePlanetCollection("PSScene"),
         "test_id",
         body,
