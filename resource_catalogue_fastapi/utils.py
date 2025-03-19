@@ -387,9 +387,6 @@ def execute_order_workflow(
 
     logger.info(f"Sending request to {url} with payload: {payload}")
 
-    # TODO: Remove
-    return "Sending of request is halted for debugging purposes"
-
     response = requests.post(url, headers=headers, json=payload)
     response.raise_for_status()
     return response.json()
