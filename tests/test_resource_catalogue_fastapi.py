@@ -46,7 +46,7 @@ def test_create_item_success(mock_create_producer, mock_get_file_from_url, mock_
         b"file content", "test-bucket", "test-workspace/saved-data/file.json"
     )
     mock_create_producer.assert_called_once_with(
-        topic="harvested", producer_name="resource_catalogue_fastapi"
+        topic="transformed", producer_name="resource_catalogue_fastapi"
     )
     mock_producer.send.assert_called_once()
 

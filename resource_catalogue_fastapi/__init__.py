@@ -270,6 +270,13 @@ class QuoteRequest(BaseModel):
     licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
 
 
+class QuoteResponse(BaseModel):
+    """Response body for quote endpoint"""
+
+    value: float
+    units: str
+
+
 def validate_licence(collection: str, licence: str):
     if collection == OrderableAirbusCollection.sar.value:
         allowed_licences = {e.value for e in LicenceRadar}
@@ -372,13 +379,6 @@ def validate_radar_options(
     return radar_bundle
 
 
-class QuoteResponse(BaseModel):
-    """Response body for quote endpoint"""
-
-    value: float
-    units: str
-
-
 def upload_nested_files(
     url: str, workspace: str, catalog_name: str = "saved-data", order_status: Optional[str] = None
 ) -> Tuple[Dict[str, List[str]], Optional[str], str]:
@@ -410,41 +410,18 @@ def upload_nested_files(
         logger.info(f"Uploading item to workspace {workspace} with key {workspace_key}")
 
         # Upload item to S3
-        is_updated = upload_file_s3(body, S3_BUCKET, workspace_key)
+        upload_file_s3(body, S3_BUCKET, workspace_key)
 
         logger.info("Item uploaded successfully")
 
-        if is_updated:
-            keys["updated_keys"].append(workspace_key)
-        else:
-            keys["added_keys"].append(workspace_key)
+        keys["added_keys"].append(workspace_key)
     return keys, ordered_item_key
-
-
-def upload_single_item(url: str, workspace: str, workspace_key: str, order_status: str):
-    """Uploads one item found at given URL to a workspace, updating the order status"""
-    body = get_file_from_url(url)
-    try:
-        json_body = json.loads(body)
-        update_stac_order_status(json_body, None, order_status)
-        body = json.dumps(json_body)
-    except Exception as e:
-        logger.error(f"Error parsing item {url} to order as STAC: {e}")
-        raise
-
-    logger.info(f"Uploading item to workspace {workspace} with key {workspace_key}")
-
-    # Upload item to S3
-    is_updated = upload_file_s3(body, S3_BUCKET, workspace_key)
-
-    logger.info("Item uploaded successfully")
-
-    return is_updated
 
 
 @app.post(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
+    deprecated=True,
 )
 async def create_item(
     workspace: str,
@@ -476,6 +453,7 @@ async def create_item(
 @app.delete(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
+    deprecated=True,
 )
 async def delete_item(
     workspace: str,
@@ -513,6 +491,7 @@ async def delete_item(
 @app.put(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
+    deprecated=True,
 )
 async def update_item(
     workspace: str,
@@ -660,7 +639,7 @@ async def order_item(
         "endUser": {"country": order_request.endUserCountry, "endUserName": username},
         "licence": licence.airbus_value if licence else None,
     }
-    added_keys, stac_item_key, item_data = upload_stac_hierarchy_for_order(
+    added_keys, stac_item_key, transformed_item_key, item_data = upload_stac_hierarchy_for_order(
         base_item_url, catalog.value, collection.value, item, workspace, order_options, S3_BUCKET
     )
 
@@ -732,7 +711,9 @@ async def order_item(
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
         logger.error(f"Error executing order workflow: {e}")
-        upload_single_item(base_item_url, workspace, stac_item_key, OrderStatus.FAILED.value)
+        update_stac_order_status(item_data, None, OrderStatus.FAILED.value)
+        upload_file_s3(json.dumps(item_data), S3_BUCKET, stac_item_key)
+        upload_file_s3(json.dumps(item_data), S3_BUCKET, transformed_item_key)
         logger.info(f"Sending message to pulsar: {output_data}")
         producer.send((json.dumps(output_data)).encode("utf-8"))
         raise HTTPException(status_code=500, detail="Error executing order workflow") from e

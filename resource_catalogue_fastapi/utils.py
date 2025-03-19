@@ -142,17 +142,14 @@ def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
 
 
 def upload_file_s3(body: str, bucket: str, key: str) -> bool:
-    """Upload data to an S3 bucket. Returns a bool indicating whether the file existed previously"""
+    """Upload data to an S3 bucket"""
     s3_client = boto3.client("s3")
-    file_exists = False
 
     try:
         s3_client.put_object(Body=body, Bucket=bucket, Key=key)
     except ClientError as e:
         logging.error(f"File upload failed: {e}")
         raise
-
-    return file_exists
 
 
 def delete_file_s3(bucket: str, key: str):
@@ -296,7 +293,7 @@ def upload_stac_hierarchy_for_order(
     upload_file_s3(json.dumps(collection_data), bucket, transformed_collection_key)
     upload_file_s3(json.dumps(item_data), bucket, transformed_item_key)
 
-    return added_keys, item_key, item_data
+    return added_keys, item_key, transformed_item_key, item_data
 
 
 def update_stac_order_status(stac_item: dict, order_id: str, order_status: str):
