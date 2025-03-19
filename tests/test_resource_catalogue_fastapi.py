@@ -6,7 +6,13 @@ import pytest
 import requests
 from fastapi.testclient import TestClient
 
-from resource_catalogue_fastapi import app
+from resource_catalogue_fastapi import (
+    OrderableCatalog,
+    OrderablePlanetCollection,
+    QuoteRequest,
+    app,
+    quote,
+)
 
 client = TestClient(app)
 
@@ -381,3 +387,29 @@ def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_ai
         json={"licence": "Single User Licence"},
     )
     assert response.status_code == 404
+
+
+def test_quote_from_planet(requests_mock):
+    expected = {"value": 34, "units": "km2"}
+
+    mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
+
+    requests_mock.get(
+        "https://url.com/planet/collections/PSScene/items/test_id",
+        json=mock_planet_response,
+    )
+
+    body = QuoteRequest(**{})
+    request = MagicMock()
+    request.url = "https://url.com"
+
+    response = quote(
+        request,
+        None,
+        OrderableCatalog("planet"),
+        OrderablePlanetCollection("PSScene"),
+        "test_id",
+        body,
+    )
+
+    assert response.__dict__ == expected
