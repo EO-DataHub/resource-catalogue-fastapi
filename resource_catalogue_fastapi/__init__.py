@@ -90,6 +90,7 @@ app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
 # Dependency function to get or create the producer
 def get_producer():
+    """Get or create a producer for the Pulsar client"""
     global producer
     if producer is None:
         producer = pulsar_client.create_producer(
@@ -101,18 +102,21 @@ def get_producer():
 async def workspace_access_dependency(
     request: Request, path_params: dict = Depends(get_path_params)  # noqa: B008
 ):
+    """Dependency to check if a user has access to a specified workspace"""
     if ENABLE_OPA_POLICY_CHECK:
         if not await check_user_can_access_requested_workspace(request, path_params):
             raise HTTPException(status_code=403, detail="Access denied")
 
 
 def ensure_user_can_access_a_workspace(request: Request):
+    """Dependency to check if a user has access to a workspace"""
     if ENABLE_OPA_POLICY_CHECK:
         if not check_user_can_access_a_workspace(request):
             raise HTTPException(status_code=403, detail="Access denied")
 
 
 def ensure_user_logged_in(request: Request):
+    """Dependency to check if a user is logged in"""
     if ENABLE_OPA_POLICY_CHECK:
         username, _ = get_user_details(request)
 
@@ -124,11 +128,15 @@ def ensure_user_logged_in(request: Request):
 
 
 class ParentCatalog(str, Enum):
+    """Parent catalogue for commercial data in the resource catalogue"""
+
     supported_datasets = "supported-datasets"
     commercial = "commercial"
 
 
 class OrderableCatalog(str, Enum):
+    """Catalogues for ordering commercial data"""
+
     planet = "planet"
     airbus = "airbus"
 
@@ -139,6 +147,8 @@ OrderablePlanetCollection = Enum(
 
 
 class OrderableAirbusCollection(str, Enum):
+    """Collections for ordering Airbus commercial data"""
+
     sar = "airbus_sar_data"
     pneo = "airbus_pneo_data"
     phr = "airbus_phr_data"
@@ -151,17 +161,16 @@ combined_collections.update({e.name: e.value for e in OrderablePlanetCollection}
 OrderableCollection = Enum("OrderableCollection", combined_collections)
 
 
-class EndUser(BaseModel):
-    endUserName: str
-    country: str
-
-
 class ItemRequest(BaseModel):
+    """Request body for create, update and delete item endpoints"""
+
     url: str
     extra_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class ProductBundle(str, Enum):
+    """Product bundles for Planet and Airbus optical data"""
+
     general_use = "General use"
     visual = "Visual"
     basic = "Basic"
@@ -169,6 +178,8 @@ class ProductBundle(str, Enum):
 
 
 class ProductBundleRadar(str, Enum):
+    """Product bundles for Airbus SAR data"""
+
     SSC = "SSC"
     MGD = "MGD"
     GEC = "GEC"
@@ -176,12 +187,15 @@ class ProductBundleRadar(str, Enum):
 
 
 class LicenceRadar(str, Enum):
+    """Licence types for Airbus SAR data"""
+
     SINGLE_USER = "Single User Licence"
     MULTI_2_5 = "Multi User (2 - 5) Licence"
     MULTI_6_30 = "Multi User (6 - 30) Licence"
 
     @property
     def airbus_value(self):
+        """Map the licence type to the Airbus API value"""
         mappings = {
             "Single User Licence": "Single User License",
             "Multi User (2 - 5) Licence": "Multi User (2 - 5) License",
@@ -191,6 +205,8 @@ class LicenceRadar(str, Enum):
 
 
 class LicenceOptical(str, Enum):
+    """Licence types for Airbus optical data"""
+
     STANDARD = "Standard"
     BACKGROUND = "Background Layer"
     STANDARD_BACKGROUND = "Standard + Background Layer"
@@ -203,6 +219,7 @@ class LicenceOptical(str, Enum):
 
     @property
     def airbus_value(self):
+        """Map the licence type to the Airbus API value"""
         mappings = {
             "Standard": "standard",
             "Background Layer": "background_layer",
@@ -218,22 +235,29 @@ class LicenceOptical(str, Enum):
 
 
 class Orbit(str, Enum):
+    """Orbit types for Airbus SAR data"""
+
     RAPID = "rapid"
     SCIENCE = "science"
 
 
 class ResolutionVariant(str, Enum):
+    """Resolution variants for Airbus SAR data"""
+
     RE = "RE"
     SE = "SE"
 
 
 class Projection(str, Enum):
+    """Projection types for Airbus SAR data"""
+
     AUTO = "Auto"
     UTM = "UTM"
     UPS = "UPS"
 
     @property
     def airbus_value(self):
+        """Map the projection type to the Airbus API value"""
         mappings = {
             "Auto": "auto",
             "UTM": "UTM",
@@ -243,11 +267,14 @@ class Projection(str, Enum):
 
 
 class RadarOptions(BaseModel):
+    """Radar options for Airbus SAR data"""
+
     orbit: Orbit
     resolutionVariant: Optional[ResolutionVariant] = None
     projection: Optional[Projection] = None
 
     def model_dump(self):
+        """Return the model data as a dictionary to send to the Airbus API"""
         data = super().model_dump()
         data = {k: v for k, v in data.items() if v is not None}
         if self.projection:
@@ -256,6 +283,8 @@ class RadarOptions(BaseModel):
 
 
 class OrderRequest(BaseModel):
+    """Request body for order endpoint"""
+
     productBundle: Union[ProductBundle, ProductBundleRadar]
     coordinates: Optional[list] = Field(default_factory=list)
     endUserCountry: Optional[str] = None
@@ -277,7 +306,10 @@ class QuoteResponse(BaseModel):
     units: str
 
 
-def validate_licence(collection: str, licence: str):
+def validate_licence(
+    collection: str, licence: str
+) -> Optional[Union[LicenceOptical, LicenceRadar]]:
+    """Validate the licence type against allowed values for the collection"""
     if collection == OrderableAirbusCollection.sar.value:
         allowed_licences = {e.value for e in LicenceRadar}
         if not licence:
@@ -308,7 +340,10 @@ def validate_licence(collection: str, licence: str):
     return None
 
 
-def validate_product_bundle(collection: str, product_bundle: str):
+def validate_product_bundle(
+    collection: str, product_bundle: str
+) -> Union[ProductBundle, ProductBundleRadar]:
+    """Validate the product bundle against allowed values for the collection"""
     if collection == OrderableAirbusCollection.sar.value:
         allowed_bundles = {e.value for e in ProductBundleRadar}
         if product_bundle not in allowed_bundles:
@@ -329,7 +364,8 @@ def validate_product_bundle(collection: str, product_bundle: str):
 
 def validate_radar_options(
     collection: str, radar_options: Optional[RadarOptions], product_bundle: str
-):
+) -> Optional[Dict[str, Any]]:
+    """Validate the radar options for Airbus SAR data"""
     if collection != OrderableAirbusCollection.sar.value:
         return None
     if not radar_options:

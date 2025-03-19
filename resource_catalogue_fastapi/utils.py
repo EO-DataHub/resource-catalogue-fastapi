@@ -6,7 +6,7 @@ import urllib.request
 from datetime import datetime, timezone
 from distutils.util import strtobool
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Union
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -22,7 +22,9 @@ ADES_URL = os.getenv("ADES_URL")
 WORKSPACES_CLAIM_PATH = os.getenv("WORKSPACES_CLAIM_PATH", "workspaces")
 
 
-class OrderStatus(Enum):
+class OrderStatus(str, Enum):
+    """Valid order statuses from the order STAC extension"""
+
     ORDERABLE = "orderable"
     ORDERED = "ordered"
     PENDING = "pending"
@@ -32,12 +34,14 @@ class OrderStatus(Enum):
     CANCELED = "canceled"
 
 
-def get_path_params(request: Request):
+def get_path_params(request: Request) -> dict:
+    """Get path parameters from the request"""
     logger.debug("CALCULATING PATH PARAMETERS")
     return request.scope.get("path_params", {})
 
 
 async def get_body_params(request: Request) -> Optional[dict]:
+    """Get body parameters from the request"""
     try:
         body = await request.json()
         return body
@@ -46,7 +50,7 @@ async def get_body_params(request: Request) -> Optional[dict]:
         return None
 
 
-def get_nested_value(data: dict, path: str, default=None):
+def get_nested_value(data: dict, path: str, default=None) -> Union[list, str]:
     """Retrieve a nested value from a dictionary using a dot-separated path."""
     keys = path.split(".")
     for key in keys:
@@ -58,7 +62,7 @@ def get_nested_value(data: dict, path: str, default=None):
 
 
 def get_user_details(request: Request) -> tuple:
-    """Get user details from the request"""
+    """Get username and workspace from the request"""
     token = request.headers.get("authorization", "")
     stripped_token = token.replace("Bearer ", "")
     if stripped_token:
@@ -120,8 +124,8 @@ def check_user_can_access_a_workspace(request: Request) -> bool:
 last_deploy_times = {}
 
 
-# Dependency to check the last call time
 def rate_limit(deploy_workspace: str):
+    """Rate limit requests"""
     current_time = time.time()
     print(last_deploy_times.get(deploy_workspace, 0))
     last_call_time = last_deploy_times.get(deploy_workspace, 0)
@@ -133,10 +137,12 @@ def rate_limit(deploy_workspace: str):
 
 
 def get_workspace(request: Request) -> str:
+    """Get the workspace from the request"""
     return request.path_params["workspace"]
 
 
 def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
+    """Dependency to rate limit requests"""
     if strtobool(os.getenv("ENABLE_RATE_LIMIT", "false")):
         rate_limit(workspace)
 
