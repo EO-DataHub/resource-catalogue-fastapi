@@ -835,6 +835,7 @@ def quote(
                         status_code=500,
                         content={"detail": "Multi and Stereo orders are not currently supported"},
                     )
+                    # Unreachable code preparing item_uuids, awaiting further implementation of multi orders.
                     for multi_id in multi_ids:
                         multi_url = f"{base_item_url}/../{multi_id}"
                         multi_response = requests.get(multi_url)
