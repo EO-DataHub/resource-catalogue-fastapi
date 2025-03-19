@@ -189,7 +189,7 @@ class ProductBundleRadar(str, Enum):
 class LicenceRadar(str, Enum):
     """Licence types for Airbus SAR data"""
 
-    SINGLE_USER = "Single User Licence"
+    SINGLE = "Single User Licence"
     MULTI_2_5 = "Multi User (2 - 5) Licence"
     MULTI_6_30 = "Multi User (6 - 30) Licence"
 
