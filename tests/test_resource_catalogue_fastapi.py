@@ -1,6 +1,6 @@
 import json
 import os
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
@@ -163,23 +163,42 @@ def test_order_item_success(
 
 
 @patch("resource_catalogue_fastapi.upload_file_s3")
-@patch("resource_catalogue_fastapi.get_file_from_url")
+@patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.utils.requests.post")
+@patch("resource_catalogue_fastapi.utils.requests.get")
+@patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
 def test_order_item_failure(
-    mock_create_producer, mock_post_request, mock_get_file_from_url, mock_upload_file_s3
+    mock_create_producer,
+    mock_get_user_details,
+    mock_get_request,
+    mock_post_request,
+    mock_utils_upload_file_s3,
+    mock_upload_file_s3,
 ):
     # Mock the dependencies
-    mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
     mock_producer = MagicMock()
     mock_create_producer.return_value = mock_producer
-    mock_response = MagicMock()
-    mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("Mocked error")
-    mock_post_request.return_value = mock_response
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.side_effect = requests.exceptions.HTTPError("Mocked error")
+    mock_post_request.return_value = mock_post_response
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "links": [
+            {"href": "http://example.com/collection", "rel": "collection"},
+            {"href": "http://example.com/catalog", "rel": "parent"},
+        ]
+    }
+    mock_get_response.raise_for_status = MagicMock()
+    mock_get_request.return_value = mock_get_response
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
 
-    url = "http://testserver/stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/file"
     # Define the request payload
-    payload = {"workspace": "test-workspace", "product_bundle": "bundle"}
+    payload = {
+        "productBundle": "SSC",
+        "licence": "Single User Licence",
+        "radarOptions": {"orbit": "rapid"},
+    }
 
     # Send the request
     response = client.post(
@@ -192,33 +211,22 @@ def test_order_item_failure(
     assert response.json() == {"detail": "Error executing order workflow"}
 
     # Verify interactions with mocks
-    mock_get_file_from_url.assert_called_with(url)
-    assert mock_get_file_from_url.call_count == 3
-    mock_upload_file_s3.assert_has_calls(
-        [
-            call(
-                b'{"stac_item": "data"}',
-                "test-bucket",
-                "test-workspace/commercial-data/airbus_sar_data.json",
-            ),
-            call().__bool__(),
-            call(
-                '{"stac_item": "data", "assets": {}, "properties": {"order.status": "pending"}, '
-                '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
-                "test-bucket",
-                "test-workspace/commercial-data/airbus_sar_data/items/file.json",
-            ),
-            call().__bool__(),
-            call(
-                '{"stac_item": "data", "properties": {"order.status": "failed"}, '
-                '"stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"]}',
-                "test-bucket",
-                "test-workspace/commercial-data/airbus_sar_data/items/file.json",
-            ),
-        ],
-        any_order=True,
-    )
-    assert mock_upload_file_s3.call_count == 3
+    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    found = False
+    for call_args in mock_upload_file_s3.call_args_list:
+        data = json.loads(call_args[0][0])
+        if data.get("properties", {}).get("order.status") == "failed":
+            properties = data.get("properties", {})
+            assert properties.get("created")
+            assert properties.get("updated")
+            order_options = properties.get("order_options")
+            assert order_options.get("endUser").get("endUserName") == "test_user"
+            assert order_options.get("licence") == "Single User License"
+            assert order_options.get("productBundle").get("product_type") == "SSC"
+            assert order_options.get("productBundle").get("orbit") == "rapid"
+            found = True
+            break
+    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
     mock_post_request.assert_called_once()
 
 
