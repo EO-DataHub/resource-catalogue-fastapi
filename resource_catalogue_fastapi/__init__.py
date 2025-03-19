@@ -679,7 +679,7 @@ async def order_item(
         base_item_url, catalog.value, collection.value, item, workspace, order_options, S3_BUCKET
     )
 
-    #
+    # Check if the item is a multi or stereo PNEO order
     if collection.value == OrderableAirbusCollection.pneo and (
         multi_ids := item_data.get("properties", {}).get(  # noqa: F841
             "composed_of_acquisition_identifiers"
