@@ -664,6 +664,17 @@ async def order_item(
         base_item_url, catalog.value, collection.value, item, workspace, order_options, S3_BUCKET
     )
 
+    #
+    if collection.value == OrderableAirbusCollection.pneo and (
+        multi_ids := item_data.get("properties", {}).get(  # noqa: F841
+            "composed_of_acquisition_identifiers"
+        )
+    ):
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Multi and Stereo orders are not currently supported"},
+        )
+
     # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders
     optical_collections = {
         e.value for e in OrderableAirbusCollection if e != OrderableAirbusCollection.sar
@@ -797,12 +808,16 @@ def quote(
                 contract_id = "CTR24005241"
                 datastrip_id = None
                 item_uuids = [item_data.get("properties", {}).get("id")]
-                if multi_ids := item_data.get("properties", {}).get(
+                if multi_ids := item_data.get("properties", {}).get(  # noqa: F841
                     "composed_of_acquisition_identifiers"
                 ):
                     item_uuids = []
                     product_type = "PleiadesNeoArchiveMulti"
                     spectral_processing = "full_bundle"
+                    return JSONResponse(
+                        status_code=500,
+                        content={"detail": "Multi and Stereo orders are not currently supported"},
+                    )
                     for multi_id in multi_ids:
                         multi_url = f"{base_item_url}/../{multi_id}"
                         multi_response = requests.get(multi_url)
