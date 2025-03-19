@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 
 class PlanetClient:
+    """Client for Planet API and Planet-specific functions"""
+
     def __init__(self):
         pass
 

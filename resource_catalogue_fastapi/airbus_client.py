@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 
 class AirbusClient:
+    """Client for Airbus API"""
+
     def __init__(self, airbus_env: str):
         self.airbus_env = airbus_env
         self.airbus_api_key = os.getenv("AIRBUS_API_KEY")
