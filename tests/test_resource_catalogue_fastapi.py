@@ -107,7 +107,7 @@ def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
 @patch("resource_catalogue_fastapi.utils.requests.get")
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
-def test_order_item_success(
+def test_order_item_success_airbus_sar(
     mock_create_producer,
     mock_get_user_details,
     mock_get_request,
@@ -166,6 +166,297 @@ def test_order_item_success(
 
     assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
     mock_post_request.assert_called_once()
+
+
+@patch("resource_catalogue_fastapi.utils.upload_file_s3")
+@patch("resource_catalogue_fastapi.get_file_from_url")
+@patch("resource_catalogue_fastapi.utils.requests.post")
+@patch("resource_catalogue_fastapi.utils.requests.get")
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.pulsar_client.create_producer")
+def test_order_item_success_airbus_phr(
+    mock_create_producer,
+    mock_get_user_details,
+    mock_get_request,
+    mock_post_request,
+    mock_get_file_from_url,
+    mock_upload_file_s3,
+):
+    # Mock the dependencies
+    mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
+    mock_producer = MagicMock()
+    mock_create_producer.return_value = mock_producer
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "links": [
+            {"href": "http://example.com/collection", "rel": "collection"},
+            {"href": "http://example.com/catalog", "rel": "parent"},
+        ]
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post_request.return_value = mock_response
+    mock_get_request.return_value = mock_response
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    # Define the request payload
+    payload = {
+        "productBundle": "General use",
+        "licence": "Standard",
+    }
+
+    # Send the request
+    response = client.post(
+        "/stac/catalogs/commercial/catalogs/airbus/collections/airbus_phr_data/items/file/order",
+        json=payload,
+    )
+
+    # Assertions
+    assert response.status_code == 201
+    assert response.json().get("properties").get("order.status") == "pending"
+
+    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    found = False
+    for call_args in mock_upload_file_s3.call_args_list:
+        data = json.loads(call_args[0][0])
+        if data.get("properties", {}).get("order.status") == "pending":
+            properties = data.get("properties", {})
+            assert properties.get("created")
+            assert properties.get("updated")
+            order_options = properties.get("order_options")
+            assert order_options.get("endUser").get("endUserName") == "test_user"
+            assert order_options.get("licence") == "standard"
+            assert order_options.get("productBundle") == "General use"
+            found = True
+            break
+
+    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    mock_post_request.assert_called_once()
+
+
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.validate_country_code")
+@patch("resource_catalogue_fastapi.utils.upload_file_s3")
+@patch("resource_catalogue_fastapi.get_file_from_url")
+@patch("resource_catalogue_fastapi.utils.requests.post")
+@patch("resource_catalogue_fastapi.utils.requests.get")
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.pulsar_client.create_producer")
+def test_order_item_success_airbus_pneo(
+    mock_create_producer,
+    mock_get_user_details,
+    mock_get_request,
+    mock_post_request,
+    mock_get_file_from_url,
+    mock_upload_file_s3,
+    mock_validate_country_code,
+):
+    # Mock the dependencies
+    mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
+    mock_producer = MagicMock()
+    mock_create_producer.return_value = mock_producer
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "links": [
+            {"href": "http://example.com/collection", "rel": "collection"},
+            {"href": "http://example.com/catalog", "rel": "parent"},
+        ]
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post_request.return_value = mock_response
+    mock_get_request.return_value = mock_response
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+    mock_validate_country_code.return_value = None
+
+    # Define the request payload
+    payload = {
+        "productBundle": "Visual",
+        "licence": "Standard Multi End-Users (>30)",
+        "endUserCountry": "GB",
+    }
+
+    # Send the request
+    response = client.post(
+        "/stac/catalogs/commercial/catalogs/airbus/collections/airbus_pneo_data/items/file/order",
+        json=payload,
+    )
+
+    # Assertions
+    assert response.status_code == 201
+    assert response.json().get("properties").get("order.status") == "pending"
+
+    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    found = False
+    for call_args in mock_upload_file_s3.call_args_list:
+        data = json.loads(call_args[0][0])
+        if data.get("properties", {}).get("order.status") == "pending":
+            properties = data.get("properties", {})
+            assert properties.get("created")
+            assert properties.get("updated")
+            order_options = properties.get("order_options")
+            assert order_options.get("endUser").get("endUserName") == "test_user"
+            assert order_options.get("endUser").get("country") == "GB"
+            assert order_options.get("licence") == "standard_up_30"
+            assert order_options.get("productBundle") == "Visual"
+            found = True
+            break
+
+    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    mock_post_request.assert_called_once()
+
+
+@patch("resource_catalogue_fastapi.utils.upload_file_s3")
+@patch("resource_catalogue_fastapi.get_file_from_url")
+@patch("resource_catalogue_fastapi.utils.requests.post")
+@patch("resource_catalogue_fastapi.utils.requests.get")
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.pulsar_client.create_producer")
+def test_order_item_success_airbus_spot(
+    mock_create_producer,
+    mock_get_user_details,
+    mock_get_request,
+    mock_post_request,
+    mock_get_file_from_url,
+    mock_upload_file_s3,
+):
+    # Mock the dependencies
+    mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
+    mock_producer = MagicMock()
+    mock_create_producer.return_value = mock_producer
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "links": [
+            {"href": "http://example.com/collection", "rel": "collection"},
+            {"href": "http://example.com/catalog", "rel": "parent"},
+        ]
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post_request.return_value = mock_response
+    mock_get_request.return_value = mock_response
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    # Define the request payload
+    payload = {
+        "productBundle": "Analytic",
+        "licence": "Academic",
+        "coordinates": [[[4, 5], [5, 6], [6, 7]]],
+    }
+
+    # Send the request
+    response = client.post(
+        "/stac/catalogs/commercial/catalogs/airbus/collections/airbus_spot_data/items/file/order",
+        json=payload,
+    )
+
+    # Assertions
+    assert response.status_code == 201
+    assert response.json().get("properties").get("order.status") == "pending"
+
+    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    found = False
+    for call_args in mock_upload_file_s3.call_args_list:
+        data = json.loads(call_args[0][0])
+        if data.get("properties", {}).get("order.status") == "pending":
+            properties = data.get("properties", {})
+            assert properties.get("created")
+            assert properties.get("updated")
+            order_options = properties.get("order_options")
+            assert order_options.get("endUser").get("endUserName") == "test_user"
+            assert order_options.get("licence") == "educ"
+            assert order_options.get("productBundle") == "Analytic"
+            found = True
+            break
+
+    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    mock_post_request.assert_called_once()
+
+
+@patch("resource_catalogue_fastapi.utils.upload_file_s3")
+@patch("resource_catalogue_fastapi.get_file_from_url")
+@patch("resource_catalogue_fastapi.utils.requests.post")
+@patch("resource_catalogue_fastapi.utils.requests.get")
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.pulsar_client.create_producer")
+def test_order_item_success_planet(
+    mock_create_producer,
+    mock_get_user_details,
+    mock_get_request,
+    mock_post_request,
+    mock_get_file_from_url,
+    mock_upload_file_s3,
+):
+    # Mock the dependencies
+    mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
+    mock_producer = MagicMock()
+    mock_create_producer.return_value = mock_producer
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "links": [
+            {"href": "http://example.com/collection", "rel": "collection"},
+            {"href": "http://example.com/catalog", "rel": "parent"},
+        ]
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post_request.return_value = mock_response
+    mock_get_request.return_value = mock_response
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    # Define the request payload
+    payload = {
+        "productBundle": "Basic",
+    }
+
+    # Send the request
+    response = client.post(
+        "/stac/catalogs/commercial/catalogs/planet/collections/PSScene/items/file/order",
+        json=payload,
+    )
+
+    # Assertions
+    assert response.status_code == 201
+    assert response.json().get("properties").get("order.status") == "pending"
+
+    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    found = False
+    for call_args in mock_upload_file_s3.call_args_list:
+        data = json.loads(call_args[0][0])
+        if data.get("properties", {}).get("order.status") == "pending":
+            properties = data.get("properties", {})
+            assert properties.get("created")
+            assert properties.get("updated")
+            order_options = properties.get("order_options")
+            assert order_options.get("endUser").get("endUserName") == "test_user"
+            assert order_options.get("productBundle") == "Basic"
+            found = True
+            break
+
+    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    mock_post_request.assert_called_once()
+
+
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.pulsar_client.create_producer")
+def test_order_item_invalid(
+    mock_create_producer,
+    mock_get_user_details,
+):
+    # Mock the dependencies
+    mock_producer = MagicMock()
+    mock_create_producer.return_value = mock_producer
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    # Define the request payload
+    payload = {
+        "productBundle": "General use",
+        "licence": "Invalid licence",
+    }
+
+    # Send the request
+    response = client.post(
+        "/stac/catalogs/commercial/catalogs/airbus/collections/airbus_phr_data/items/file/order",
+        json=payload,
+    )
+
+    # Assertions
+    assert response.status_code == 422
 
 
 @patch("resource_catalogue_fastapi.upload_file_s3")

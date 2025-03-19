@@ -742,7 +742,7 @@ async def order_item(
             product_bundle_value,
             order_request.coordinates,
             end_users,
-            licence.airbus_value,
+            licence.airbus_value if licence else None,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
