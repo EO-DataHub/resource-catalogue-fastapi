@@ -275,15 +275,16 @@ def upload_stac_hierarchy_for_order(
     item_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}/{item_id}.json"
 
     transformed_catalog_key = (
-        f"transformed/user-datasets/{workspace}/catalogs/{catalog_name}/catalogs/{catalog_id}.json"
+        f"transformed/catalogs/user/catalogs/{workspace}/catalogs/{catalog_name}/catalogs/"
+        f"{catalog_id}.json"
     )
     transformed_collection_key = (
-        f"transformed/user-datasets/{workspace}/catalogs/{catalog_name}/catalogs/{catalog_id}/"
-        f"collections/{collection_id}.json"
+        f"transformed/catalogs/user/catalogs/{workspace}/catalogs/{catalog_name}/catalogs/"
+        f"{catalog_id}/collections/{collection_id}.json"
     )
     transformed_item_key = (
-        f"transformed/user-datasets/{workspace}/catalogs/{catalog_name}/catalogs/{catalog_id}/"
-        f"collections/{collection_id}/items/{item_id}.json"
+        f"transformed/catalogs/user/catalogs/{workspace}/catalogs/{catalog_name}/catalogs/"
+        f"{catalog_id}/collections/{collection_id}/items/{item_id}.json"
     )
     added_keys = [transformed_catalog_key, transformed_collection_key, transformed_item_key]
     upload_file_s3(
