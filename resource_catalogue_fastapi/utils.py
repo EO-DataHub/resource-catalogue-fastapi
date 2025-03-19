@@ -287,36 +287,14 @@ def upload_stac_hierarchy_for_order(
         f"{catalog_id}/collections/{collection_id}/items/{item_id}.json"
     )
     added_keys = [transformed_catalog_key, transformed_collection_key, transformed_item_key]
-    upload_file_s3(
-        body=json.dumps(catalog_data),
-        bucket=bucket,
-        key=catalog_key,
-    )
-    upload_file_s3(
-        body=json.dumps(collection_data),
-        bucket=bucket,
-        key=collection_key,
-    )
-    upload_file_s3(
-        body=json.dumps(item_data),
-        bucket=bucket,
-        key=item_key,
-    )
-    upload_file_s3(
-        body=json.dumps(catalog_data),
-        bucket=bucket,
-        key=transformed_catalog_key,
-    )
-    upload_file_s3(
-        body=json.dumps(collection_data),
-        bucket=bucket,
-        key=transformed_collection_key,
-    )
-    upload_file_s3(
-        body=json.dumps(item_data),
-        bucket=bucket,
-        key=transformed_item_key,
-    )
+    # Upload files as reference for the user
+    upload_file_s3(json.dumps(catalog_data), bucket, catalog_key)
+    upload_file_s3(json.dumps(collection_data), bucket, collection_key)
+    upload_file_s3(json.dumps(item_data), bucket, item_key)
+    # Upload files for ingestion to stac-fastapi
+    upload_file_s3(json.dumps(catalog_data), bucket, transformed_catalog_key)
+    upload_file_s3(json.dumps(collection_data), bucket, transformed_collection_key)
+    upload_file_s3(json.dumps(item_data), bucket, transformed_item_key)
 
     return added_keys, item_key, item_data
 
