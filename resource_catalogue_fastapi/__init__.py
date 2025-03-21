@@ -3,7 +3,7 @@ import logging
 import os
 from distutils.util import strtobool
 from enum import Enum
-from typing import Annotated, Any, Dict, List, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
 
 import requests
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
@@ -12,10 +12,14 @@ from fastapi.staticfiles import StaticFiles
 from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
 
+from .airbus_client import AirbusClient
+from .planet_client import PlanetClient
 from .utils import (
+    OrderStatus,
+    check_user_can_access_a_workspace,
+    check_user_can_access_requested_workspace,
     delete_file_s3,
     execute_order_workflow,
-    generate_airbus_access_token,
     get_file_from_url,
     get_nested_files_from_url,
     get_path_params,
@@ -23,8 +27,7 @@ from .utils import (
     rate_limiter_dependency,
     update_stac_order_status,
     upload_file_s3,
-    validate_country_code,
-    validate_workspace_access,
+    upload_stac_hierarchy_for_order,
 )
 
 logging.basicConfig(
@@ -60,6 +63,11 @@ PULSAR_URL = os.environ.get("PULSAR_URL", "pulsar://pulsar-broker.pulsar:6650")
 pulsar_client = PulsarClient(PULSAR_URL)
 producer = None
 
+AIRBUS_ENV = os.getenv("AIRBUS_ENV", "prod")
+airbus_client = AirbusClient(AIRBUS_ENV)
+planet_client = PlanetClient()
+
+PLANET_COLLECTIONS = os.getenv("PLANET_COLLECTIONS", "PSScene,SkySatCollect").split(",")
 
 app = FastAPI(
     title="EODHP Resource Catalogue Manager",
@@ -82,23 +90,33 @@ app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
 # Dependency function to get or create the producer
 def get_producer():
+    """Get or create a producer for the Pulsar client"""
     global producer
     if producer is None:
         producer = pulsar_client.create_producer(
-            topic="harvested", producer_name="resource_catalogue_fastapi"
+            topic="transformed", producer_name="resource_catalogue_fastapi"
         )
     return producer
 
 
-def workspace_access_dependency(
+async def workspace_access_dependency(
     request: Request, path_params: dict = Depends(get_path_params)  # noqa: B008
 ):
+    """Dependency to check if a user has access to a specified workspace"""
     if ENABLE_OPA_POLICY_CHECK:
-        if not validate_workspace_access(request, path_params):
+        if not await check_user_can_access_requested_workspace(request, path_params):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+
+def ensure_user_can_access_a_workspace(request: Request):
+    """Dependency to check if a user has access to a workspace"""
+    if ENABLE_OPA_POLICY_CHECK:
+        if not check_user_can_access_a_workspace(request):
             raise HTTPException(status_code=403, detail="Access denied")
 
 
 def ensure_user_logged_in(request: Request):
+    """Dependency to check if a user is logged in"""
     if ENABLE_OPA_POLICY_CHECK:
         username, _ = get_user_details(request)
 
@@ -109,30 +127,292 @@ def ensure_user_logged_in(request: Request):
             raise HTTPException(status_code=404)
 
 
-class OrderStatus(Enum):
-    ORDERABLE = "orderable"
-    ORDERED = "ordered"
-    PENDING = "pending"
-    SHIPPING = "shipping"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELED = "canceled"
+class ParentCatalogue(str, Enum):
+    """Parent catalogue for commercial data in the resource catalogue"""
+
+    supported_datasets = "supported-datasets"
+    commercial = "commercial"
 
 
-class EndUser(BaseModel):
-    endUserName: str
-    country: str
+class OrderableCatalogue(str, Enum):
+    """Catalogues for ordering commercial data"""
+
+    planet = "planet"
+    airbus = "airbus"
+
+
+OrderablePlanetCollection = Enum(
+    "OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS}
+)
+
+
+class OrderableAirbusCollection(str, Enum):
+    """Collections for ordering Airbus commercial data"""
+
+    sar = "airbus_sar_data"
+    pneo = "airbus_pneo_data"
+    phr = "airbus_phr_data"
+    spot = "airbus_spot_data"
+
+
+# Combine the members of OrderableAirbusCollection and OrderablePlanetCollection
+combined_collections = {e.name: e.value for e in OrderableAirbusCollection}
+combined_collections.update({e.name: e.value for e in OrderablePlanetCollection})
+OrderableCollection = Enum("OrderableCollection", combined_collections)
 
 
 class ItemRequest(BaseModel):
+    """Request body for create, update and delete item endpoints"""
+
     url: str
     extra_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
-class OrderRequest(ItemRequest):
-    product_bundle: str
+class ProductBundle(str, Enum):
+    """Product bundles for Planet and Airbus optical data"""
+
+    general_use = "General use"
+    visual = "Visual"
+    basic = "Basic"
+    analytic = "Analytic"
+
+
+class ProductBundleRadar(str, Enum):
+    """Product bundles for Airbus SAR data"""
+
+    SSC = "SSC"
+    MGD = "MGD"
+    GEC = "GEC"
+    EEC = "EEC"
+
+
+class LicenceRadar(str, Enum):
+    """Licence types for Airbus SAR data"""
+
+    SINGLE = "Single User Licence"
+    MULTI_2_5 = "Multi User (2 - 5) Licence"
+    MULTI_6_30 = "Multi User (6 - 30) Licence"
+
+    @property
+    def airbus_value(self):
+        """Map the licence type to the Airbus API value"""
+        mappings = {
+            "Single User Licence": "Single User License",
+            "Multi User (2 - 5) Licence": "Multi User (2 - 5) License",
+            "Multi User (6 - 30) Licence": "Multi User (6 - 30) License",
+        }
+        return mappings[self.value]
+
+
+class LicenceOptical(str, Enum):
+    """Licence types for Airbus optical data"""
+
+    STANDARD = "Standard"
+    BACKGROUND = "Background Layer"
+    STANDARD_BACKGROUND = "Standard + Background Layer"
+    ACADEMIC = "Academic"
+    MEDIA = "Media Licence"
+    STANDARD_MULTI_2_5 = "Standard Multi End-Users (2-5)"
+    STANDARD_MULTI_6_10 = "Standard Multi End-Users (6-10)"
+    STANDARD_MULTI_11_30 = "Standard Multi End-Users (11-30)"
+    STANDARD_MULTI_30 = "Standard Multi End-Users (>30)"
+
+    @property
+    def airbus_value(self):
+        """Map the licence type to the Airbus API value"""
+        mappings = {
+            "Standard": "standard",
+            "Background Layer": "background_layer",
+            "Standard + Background Layer": "stand_background_layer",
+            "Academic": "educ",
+            "Media Licence": "media",
+            "Standard Multi End-Users (2-5)": "standard_1_5",
+            "Standard Multi End-Users (6-10)": "standard_6_10",
+            "Standard Multi End-Users (11-30)": "standard_11_30",
+            "Standard Multi End-Users (>30)": "standard_up_30",
+        }
+        return mappings[self.value]
+
+
+class Orbit(str, Enum):
+    """Orbit types for Airbus SAR data"""
+
+    RAPID = "rapid"
+    SCIENCE = "science"
+
+
+class ResolutionVariant(str, Enum):
+    """Resolution variants for Airbus SAR data"""
+
+    RE = "RE"
+    SE = "SE"
+
+
+class Projection(str, Enum):
+    """Projection types for Airbus SAR data"""
+
+    AUTO = "Auto"
+    UTM = "UTM"
+    UPS = "UPS"
+
+    @property
+    def airbus_value(self):
+        """Map the projection type to the Airbus API value"""
+        mappings = {
+            "Auto": "auto",
+            "UTM": "UTM",
+            "UPS": "UPS",
+        }
+        return mappings[self.value]
+
+
+class RadarOptions(BaseModel):
+    """Radar options for Airbus SAR data"""
+
+    orbit: Orbit
+    resolutionVariant: Optional[ResolutionVariant] = None
+    projection: Optional[Projection] = None
+
+    def model_dump(self):
+        """Return the model data as a dictionary to send to the Airbus API"""
+        data = super().model_dump()
+        data = {k: v for k, v in data.items() if v is not None}
+        if self.projection:
+            data["projection"] = self.projection.airbus_value
+        return data
+
+
+class OrderRequest(BaseModel):
+    """Request body for order endpoint"""
+
+    productBundle: Union[ProductBundle, ProductBundleRadar]
     coordinates: Optional[list] = Field(default_factory=list)
     endUserCountry: Optional[str] = None
+    licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
+    radarOptions: Optional[RadarOptions] = None
+
+
+class QuoteRequest(BaseModel):
+    """Request body for quote endpoint"""
+
+    coordinates: list = None
+    licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
+
+
+class QuoteResponse(BaseModel):
+    """Response body for quote endpoint"""
+
+    value: float
+    units: str
+
+
+def validate_licence(
+    collection: str, licence: str
+) -> Optional[Union[LicenceOptical, LicenceRadar]]:
+    """Validate the licence type against allowed values for the collection"""
+    if collection == OrderableAirbusCollection.sar.value:
+        allowed_licences = {e.value for e in LicenceRadar}
+        if not licence:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Licence is required for a radar item. Valid licences are: {allowed_licences}",
+            )
+        if licence not in allowed_licences:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid licence for a radar item. Valid licences are: {allowed_licences}",
+            )
+        return LicenceRadar(licence)
+
+    elif collection in {e.value for e in OrderableAirbusCollection}:
+        allowed_licences = {e.value for e in LicenceOptical}
+        if not licence:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Licence is required for an optical item. Valid licences are: {allowed_licences}",
+            )
+        if licence not in allowed_licences:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid licence for an optical item. Valid licences are: {allowed_licences}",
+            )
+        return LicenceOptical(licence)
+    return None
+
+
+def validate_product_bundle(
+    collection: str, product_bundle: str
+) -> Union[ProductBundle, ProductBundleRadar]:
+    """Validate the product bundle against allowed values for the collection"""
+    if collection == OrderableAirbusCollection.sar.value:
+        allowed_bundles = {e.value for e in ProductBundleRadar}
+        if product_bundle not in allowed_bundles:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid product bundle for a radar item. Valid bundles are: {allowed_bundles}",
+            )
+        return ProductBundleRadar(product_bundle)
+
+    allowed_bundles = {e.value for e in ProductBundle}
+    if product_bundle not in allowed_bundles:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid product bundle. Valid bundles are: {allowed_bundles}",
+        )
+    return ProductBundle(product_bundle)
+
+
+def validate_radar_options(
+    collection: str, radar_options: Optional[RadarOptions], product_bundle: str
+) -> Optional[Dict[str, Any]]:
+    """Validate the radar options for Airbus SAR data"""
+    if collection != OrderableAirbusCollection.sar.value:
+        return None
+    if not radar_options:
+        raise HTTPException(
+            status_code=400,
+            detail="Radar options missing for a radar item.",
+        )
+    if not radar_options.orbit:
+        raise HTTPException(
+            status_code=400,
+            detail="Orbit is required for a radar item.",
+        )
+    if product_bundle != ProductBundleRadar.SSC.value and not radar_options.resolutionVariant:
+        raise HTTPException(
+            status_code=400,
+            detail="Resolution variant is required for a radar item when the product bundle is not SSC.",
+        )
+    if product_bundle == ProductBundleRadar.SSC.value and radar_options.resolutionVariant:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Resolution variant should not be provided for a radar item when the product "
+                "bundle is SSC."
+            ),
+        )
+    if (
+        product_bundle not in [ProductBundleRadar.SSC.value, ProductBundleRadar.MGD.value]
+        and not radar_options.projection
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Projection is required for a radar item when the product bundle is not SSC or MGD.",
+        )
+    if (
+        product_bundle in [ProductBundleRadar.SSC.value, ProductBundleRadar.MGD.value]
+        and radar_options.projection
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Projection should not be provided for a radar item when the product bundle is "
+                "SSC or MGD."
+            ),
+        )
+    radar_bundle = radar_options.model_dump()
+    radar_bundle["product_type"] = product_bundle
+    return radar_bundle
 
 
 def upload_nested_files(
@@ -148,10 +428,6 @@ def upload_nested_files(
 
         # Extract the path after the first catalog from the URL to create the S3 key
         path_after_catalog = url_to_add.split("/", 9)[-1]
-        try:
-            collection_id = path_after_catalog.split("collections/")[1].split("/items/")[0]
-        except (IndexError, KeyError):
-            collection_id = None
         workspace_key = f"{workspace}/{catalog_name}/{path_after_catalog}"
         if not os.path.splitext(workspace_key)[1]:
             workspace_key += ".json"
@@ -161,12 +437,6 @@ def upload_nested_files(
                 json_body = json.loads(body)
                 json_body["assets"] = {}
                 update_stac_order_status(json_body, None, order_status)
-                # Temporary fix for EODHP-1162
-                for link in json_body.get("links", []):
-                    link["href"] = link["href"].replace(
-                        "api/catalogue/stac/v1/supported-datasets",
-                        "api/catalogue/stac/v1/catalogs/supported-datasets",
-                    )
                 body = json.dumps(json_body)
                 ordered_item_key = workspace_key
             except Exception as e:
@@ -176,41 +446,18 @@ def upload_nested_files(
         logger.info(f"Uploading item to workspace {workspace} with key {workspace_key}")
 
         # Upload item to S3
-        is_updated = upload_file_s3(body, S3_BUCKET, workspace_key)
+        upload_file_s3(body, S3_BUCKET, workspace_key)
 
         logger.info("Item uploaded successfully")
 
-        if is_updated:
-            keys["updated_keys"].append(workspace_key)
-        else:
-            keys["added_keys"].append(workspace_key)
-    return keys, ordered_item_key, collection_id
-
-
-def upload_single_item(url: str, workspace: str, workspace_key: str, order_status: str):
-    """Uploads one item found at given URL to a workspace, updating the order status"""
-    body = get_file_from_url(url)
-    try:
-        json_body = json.loads(body)
-        update_stac_order_status(json_body, None, order_status)
-        body = json.dumps(json_body)
-    except Exception as e:
-        logger.error(f"Error parsing item {url} to order as STAC: {e}")
-        raise
-
-    logger.info(f"Uploading item to workspace {workspace} with key {workspace_key}")
-
-    # Upload item to S3
-    is_updated = upload_file_s3(body, S3_BUCKET, workspace_key)
-
-    logger.info("Item uploaded successfully")
-
-    return is_updated
+        keys["added_keys"].append(workspace_key)
+    return keys, ordered_item_key
 
 
 @app.post(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
+    deprecated=True,
 )
 async def create_item(
     workspace: str,
@@ -221,7 +468,7 @@ async def create_item(
     """Endpoint to create a new item and collection within a workspace"""
 
     url = request.url
-    keys, _, _ = upload_nested_files(url, workspace)
+    keys, _ = upload_nested_files(url, workspace)
 
     output_data = {
         "id": f"{workspace}/create_item",
@@ -242,6 +489,7 @@ async def create_item(
 @app.delete(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
+    deprecated=True,
 )
 async def delete_item(
     workspace: str,
@@ -279,6 +527,7 @@ async def delete_item(
 @app.put(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
+    deprecated=True,
 )
 async def update_item(
     workspace: str,
@@ -289,7 +538,7 @@ async def update_item(
     """Endpoint to update an item and collection within a workspace"""
 
     url = request.url
-    keys, _, _ = upload_nested_files(url, workspace)
+    keys, _ = upload_nested_files(url, workspace)
 
     output_data = {
         "id": f"{workspace}/update_item",
@@ -308,26 +557,81 @@ async def update_item(
 
 
 @app.post(
-    "/manage/catalogs/user-datasets/{workspace}/commercial-data",
-    dependencies=[Depends(workspace_access_dependency)],
+    "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item}/order",
+    dependencies=[Depends(ensure_user_can_access_a_workspace)],
     responses={
-        200: {
-            "content": {"application/json": {"example": {"message": "Item ordered successfully"}}}
-        }
+        201: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "type": "Feature",
+                        "stac_version": "1.0.0",
+                        "stac_extensions": [
+                            "https://stac-extensions.github.io/order/v1.1.0/schema.json"
+                        ],
+                        "id": "example-item",
+                        "properties": {
+                            "datetime": "2023-01-01T00:00:00Z",
+                            "order.status": "Pending",
+                            "created": "2025-01-01T00:00:00Z",
+                            "updated": "2025-01-01T00:00:00Z",
+                            "order_options": {
+                                "productBundle": "Analytic",
+                                "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+                                "endUser": {"country": "GB", "endUserName": "example-user"},
+                                "licence": "Standard",
+                                "radarOptions": {
+                                    "orbit": "rapid",
+                                    "resolutionVariant": "RE",
+                                    "projection": "Auto",
+                                },
+                            },
+                        },
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+                        },
+                        "links": [],
+                        "assets": {},
+                    }
+                }
+            },
+            "headers": {"Location": {"description": "URL of the created resource"}},
+        },
+        400: {"description": "Bad Request"},
+        403: {"description": "Access Denied"},
+        404: {"description": "Not Found"},
+        500: {"description": "Internal Server Error"},
     },
 )
 async def order_item(
     request: Request,
-    workspace: str,
+    parent_catalog: ParentCatalogue,
+    catalog: OrderableCatalogue,
+    collection: OrderableCollection,
+    item: str,
     order_request: Annotated[
         OrderRequest,
         Body(
             examples=[
                 {
-                    "url": f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/airbus/collections/airbus_pneo_data/items/ACQ_PNEO3_05300415120321",
-                    "product_bundle": "general_use",
-                    "coordinates": "[[[0, 0], [0, 1], [1, 1], [0, 0]]]",
+                    "productBundle": "General use",
+                },
+                {
+                    "productBundle": "Analytic",
+                    "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
                     "endUserCountry": "GB",
+                    "licence": "Standard",
+                },
+                {
+                    "productBundle": "GEC",
+                    "endUserCountry": "GB",
+                    "licence": "Single User Licence",
+                    "radarOptions": {
+                        "orbit": "rapid",
+                        "resolutionVariant": "RE",
+                        "projection": "Auto",
+                    },
                 },
             ]
         ),
@@ -337,30 +641,66 @@ async def order_item(
     """Create a new item and collection within a workspace with an order status, and
     execute a workflow to order the item from a commercial data provider.
 
-    * url: The EODHP STAC item URL to order
-    * product_bundle: The product bundle to order from the commercial data provider
-    * coordinates: (Optional) Coordinates to limit the AOI of the item for purchase where possible. Given
-      in the same nested format as STAC
+    * productBundle: The product bundle to order from the commercial data provider
+    * coordinates: (Optional) Coordinates of a polygon to limit the AOI of the item for purchase where
+      possible. Given in the same nested format as STAC
     * endUserCountry: (Optional) A country code corresponding to the country of the end user
-    * extra_data: (Optional) A placeholder for future data options to include in the item"""
+    * licence: (Airbus only) The licence type for the order
+    * radarOptions: (Airbus SAR-only) The radar options for the order.
+        * orbit: The orbit type for the order
+        * resolutionVariant: The resolution variant for the order (Not required for SSC product bundle)
+        * projection: The projection for the order (Not required for SSC or MGD product bundles)
+    """
+
+    licence = validate_licence(collection.value, order_request.licence)
+    product_bundle = validate_product_bundle(collection.value, order_request.productBundle)
+    radar_options = validate_radar_options(
+        collection.value, order_request.radarOptions, product_bundle.value
+    )
+
+    username, workspaces = get_user_details(request)
+    # workspaces from user details was originally a list, now usually expect string containing one workspace.
+    workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
+    if not workspace:
+        # This should never occur due to the workspace access dependency
+        raise HTTPException(status_code=404)
 
     authorization = request.headers.get("Authorization")
 
-    url = order_request.url
-    keys, stac_key, collection_id = upload_nested_files(
-        url, workspace, "commercial-data", OrderStatus.PENDING.value
+    order_url = str(request.url)
+    base_item_url = order_url.rsplit("/order", 1)[0]
+    order_options = {
+        "productBundle": radar_options if radar_options else product_bundle.value,
+        "coordinates": order_request.coordinates if order_request.coordinates else None,
+        "endUser": {"country": order_request.endUserCountry, "endUserName": username},
+        "licence": licence.airbus_value if licence else None,
+    }
+    added_keys, stac_item_key, transformed_item_key, item_data = upload_stac_hierarchy_for_order(
+        base_item_url, catalog.value, collection.value, item, workspace, order_options, S3_BUCKET
     )
 
+    # Check if the item is a multi or stereo PNEO order
+    if collection.value == OrderableAirbusCollection.pneo and (
+        multi_ids := item_data.get("properties", {}).get(  # noqa: F841
+            "composed_of_acquisition_identifiers"
+        )
+    ):
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Multi and Stereo orders are not currently supported"},
+        )
+
     # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders
-    optical_collections = ["airbus_pneo_data", "airbus_phr_data", "airbus_spot_data"]
+    optical_collections = {
+        e.value for e in OrderableAirbusCollection if e != OrderableAirbusCollection.sar
+    }
     end_users = None
-    if collection_id in optical_collections:
+    if collection.value in optical_collections:
         end_users = []
         if country_code := order_request.endUserCountry:
-            validate_country_code(country_code)
-            username, _ = get_user_details(request)
+            airbus_client.validate_country_code(country_code)
             end_users = [{"endUserName": username, "country": country_code}]
-    if collection_id == "airbus_pneo_data" and not end_users:
+    if collection.value == OrderableAirbusCollection.pneo.value and not end_users:
         raise HTTPException(
             status_code=400,
             detail="End users must be supplied for PNEO orders",
@@ -370,41 +710,46 @@ async def order_item(
         "id": f"{workspace}/order_item",
         "workspace": workspace,
         "bucket_name": S3_BUCKET,
-        "added_keys": keys.get("added_keys", []),
-        "updated_keys": keys.get("updated_keys", []),
+        "added_keys": added_keys,
+        "updated_keys": [],
         "deleted_keys": [],
-        "source": workspace,
-        "target": f"user-datasets/{workspace}",
+        "source": "/",
+        "target": "/",
     }
-    if collection_id.startswith("airbus"):
-        catalog_name = "airbus"
-        if collection_id == "airbus_sar_data":
-            adaptor_name = "airbus-sar-adaptor"
-            commercial_data_bucket = "commercial-data-airbus"
-        else:
-            adaptor_name = "airbus-optical-adaptor"
-            commercial_data_bucket = "airbus-commercial-data"
+    if collection.value == OrderableAirbusCollection.sar.value:
+        adaptor_name = "airbus-sar-adaptor"
+        commercial_data_bucket = "commercial-data-airbus"
+    elif collection.value in optical_collections:
+        adaptor_name = "airbus-optical-adaptor"
+        commercial_data_bucket = "airbus-commercial-data"
     else:
-        catalog_name = "planet"
         adaptor_name = "planet-adaptor"
         commercial_data_bucket = S3_BUCKET
 
+    product_bundle_value = product_bundle.value
+    if radar_options:
+        product_bundle_value = json.dumps(radar_options)
     try:
         ades_response = execute_order_workflow(
-            catalog_name,
+            catalog.value,
             workspace,
             adaptor_name,
             authorization,
-            f"s3://{S3_BUCKET}/{stac_key}",
+            f"s3://{S3_BUCKET}/{stac_item_key}",
             commercial_data_bucket,
-            order_request.product_bundle,
+            S3_BUCKET,
+            PULSAR_URL,
+            product_bundle_value,
             order_request.coordinates,
             end_users,
+            licence.airbus_value if licence else None,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
         logger.error(f"Error executing order workflow: {e}")
-        upload_single_item(url, workspace, stac_key, OrderStatus.FAILED.value)
+        update_stac_order_status(item_data, None, OrderStatus.FAILED.value)
+        upload_file_s3(json.dumps(item_data), S3_BUCKET, stac_item_key)
+        upload_file_s3(json.dumps(item_data), S3_BUCKET, transformed_item_key)
         logger.info(f"Sending message to pulsar: {output_data}")
         producer.send((json.dumps(output_data)).encode("utf-8"))
         raise HTTPException(status_code=500, detail="Error executing order workflow") from e
@@ -412,7 +757,219 @@ async def order_item(
     logger.info(f"Sending message to pulsar: {output_data}")
     producer.send((json.dumps(output_data)).encode("utf-8"))
 
-    return JSONResponse(content={"message": "Item ordered successfully"}, status_code=200)
+    location_url = (
+        f"{EODH_DOMAIN}/api/catalogue/user/catalogs/{workspace}/catalogs/commercial-data/"
+        f"catalogs/{catalog.value}/collections/{collection.value}/items/{item}"
+    )
+
+    return JSONResponse(content=item_data, status_code=201, headers={"Location": location_url})
+
+
+@app.post(
+    "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item}/quote",
+    response_model=QuoteResponse,
+    responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+def quote(
+    request: Request,
+    parent_catalog: ParentCatalogue,
+    catalog: OrderableCatalogue,
+    collection: OrderableCollection,
+    item: str,
+    body: Annotated[
+        QuoteRequest,
+        Body(
+            examples=[
+                {
+                    "coordinates": [
+                        [[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]
+                    ],
+                    "licence": "Standard",
+                }
+            ],
+        ),
+    ],
+):
+    """Return a quote for a Planet or Airbus item ID within an EODH catalogue and collection.
+
+    * coordinates: (optional) Coordinates to limit the AOI of the item for purchase where possible.
+      Given in the same nested format as STAC
+    * licence: (Airbus-only) The licence type for the order
+    """
+
+    coordinates = body.coordinates
+    licence = validate_licence(collection.value, body.licence)
+
+    order_url = str(request.url)
+    base_item_url = order_url.rsplit("/quote", 1)[0]
+    item_data = None
+
+    if catalog.value == OrderableCatalogue.airbus.value:
+        if collection.value == OrderableAirbusCollection.sar.value:
+            if AIRBUS_ENV == "prod":
+                url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
+            else:
+                url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
+            request_body = {"acquisitions": [item], "orderTemplate": licence.airbus_value}
+        elif collection.value in {e.value for e in OrderableAirbusCollection}:
+            url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
+            spectral_processing = "bundle"
+            if collection.value == OrderableAirbusCollection.pneo.value:
+                # Check if item is part of a multi order
+                item_response = requests.get(base_item_url)
+                item_response.raise_for_status()
+                item_data = item_response.json()
+
+                product_type = "PleiadesNeoArchiveMono"
+                contract_id = "CTR24005241"
+                datastrip_id = None
+                item_uuids = [item_data.get("properties", {}).get("id")]
+                if multi_ids := item_data.get("properties", {}).get(  # noqa: F841
+                    "composed_of_acquisition_identifiers"
+                ):
+                    item_uuids = []
+                    product_type = "PleiadesNeoArchiveMulti"
+                    spectral_processing = "full_bundle"
+                    return JSONResponse(
+                        status_code=500,
+                        content={"detail": "Multi and Stereo orders are not currently supported"},
+                    )
+                    # Unreachable code preparing item_uuids, awaiting further implementation of multi orders.
+                    for multi_id in multi_ids:
+                        multi_url = f"{base_item_url}/../{multi_id}"
+                        multi_response = requests.get(multi_url)
+                        multi_response.raise_for_status()
+                        multi_data = multi_response.json()
+                        item_uuids.append(multi_data.get("properties", {}).get("id"))
+            elif collection.value == OrderableAirbusCollection.phr.value:
+                product_type = "PleiadesArchiveMono"
+                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
+                item_uuids = None
+                datastrip_id = item
+            elif collection.value == OrderableAirbusCollection.spot.value:
+                product_type = "SPOTArchive1.5Mono"
+                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
+                item_uuids = None
+                datastrip_id = item
+            if not coordinates:
+                # Fetch coordinates from the STAC item
+                if not item_data:
+                    item_response = requests.get(base_item_url)
+                    item_response.raise_for_status()
+                    item_data = item_response.json()
+                coordinates = item_data["geometry"]["coordinates"]
+
+            request_body = {
+                "aoi": [
+                    {
+                        "id": 1,
+                        "name": "Polygon 1",
+                        "geometry": {"type": "Polygon", "coordinates": coordinates},
+                    }
+                ],
+                "programReference": "",
+                "contractId": contract_id,
+                "items": [
+                    {
+                        "notifications": [],
+                        "stations": [],
+                        "productTypeId": product_type,
+                        "aoiId": 1,
+                        "properties": [],
+                    }
+                ],
+                "primaryMarket": "NQUAL",
+                "secondaryMarket": "",
+                "customerReference": "Polygon 1",
+                "optionsPerProductType": [
+                    {
+                        "productTypeId": product_type,
+                        "options": [
+                            {"key": "delivery_method", "value": "on_the_flow"},
+                            {"key": "fullStrip", "value": "false"},
+                            {"key": "image_format", "value": "dimap_geotiff"},
+                            {"key": "licence", "value": licence.airbus_value},
+                            {"key": "pixel_coding", "value": "12bits"},
+                            {"key": "priority", "value": "standard"},
+                            {"key": "processing_level", "value": "primary"},
+                            {"key": "radiometric_processing", "value": "reflectance"},
+                            {"key": "spectral_processing", "value": spectral_processing},
+                        ],
+                    }
+                ],
+                "orderGroup": "",
+                "delivery": {"type": "network"},
+            }
+
+            if item_uuids:
+                data_source_ids = []
+                for item_uuid in item_uuids:
+                    data_source_ids.append({"catalogId": "PublicMOC", "catalogItemId": item_uuid})
+                request_body["items"][0]["dataSourceIds"] = data_source_ids
+
+            if datastrip_id:
+                request_body["items"][0]["datastripIds"] = [datastrip_id]
+        else:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "detail": f"Collection {collection.value} not recognised as an Airbus collection"
+                },
+            )
+        access_token = airbus_client.generate_access_token()
+        if not access_token:
+            return JSONResponse(
+                status_code=500, content={"detail": "Failed to generate access token"}
+            )
+
+        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+        try:
+            response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
+        except requests.RequestException as e:
+            return JSONResponse(status_code=500, content={"detail": str(e)})
+
+        price_json = {}
+        if collection.value == OrderableAirbusCollection.sar.value:
+            for response_item in response_body:
+                if response_item.get("acquisitionId") == item:
+                    price_json = {
+                        "units": response_item["price"]["currency"],
+                        "value": response_item["price"]["total"],
+                    }
+                    break
+        else:
+            price_json = {
+                "units": response_body["currency"],
+                "value": response_body["totalAmount"],
+            }
+
+        if price_json:
+            return QuoteResponse(value=price_json["value"], units=price_json["units"])
+
+        return JSONResponse(
+            status_code=404, content={"detail": "Quote not found for given acquisition ID"}
+        )
+
+    elif catalog.value == OrderableCatalogue.planet.value:
+        try:
+            area = planet_client.get_area_estimate(item, collection.value, coordinates)
+
+            if collection.value == "SkySatScene" and area < 3:
+                # SkySatScene has a minimum order size of 3 km2
+                area = 3
+
+            return QuoteResponse(value=area, units="km2")
+
+        except Exception as e:
+            return JSONResponse(content={"message": str(e)}, status_code=400)
+
+    else:
+        return JSONResponse(
+            content={"message:" f"{catalog.value} not recognised"},
+            status_code=404,
+        )
 
 
 def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
@@ -427,7 +984,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
         raise HTTPException(status_code=404, detail=f"External {asset_name} link not found in item")
     logger.info(f"Fetching {asset_name} from {asset_link}")
 
-    access_token = generate_airbus_access_token("prod")
+    access_token = airbus_client.generate_access_token()
     headers = {"Authorization": f"Bearer {access_token}"}
     asset_response = requests.get(asset_link, headers=headers)
     asset_response.raise_for_status()
