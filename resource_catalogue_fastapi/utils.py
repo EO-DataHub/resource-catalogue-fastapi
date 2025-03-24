@@ -337,7 +337,7 @@ def execute_order_workflow(
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
-    url = f"{ADES_URL}/{provider_workspace}/ogc-api/processes/{workflow_name}/execution"
+    url = f"{ADES_URL}/{provider_workspace}/processes/{workflow_name}/execution"
     headers = {
         "Authorization": authorization,
         "Accept": "application/json",
