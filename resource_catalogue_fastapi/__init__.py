@@ -758,7 +758,7 @@ async def order_item(
     producer.send((json.dumps(output_data)).encode("utf-8"))
 
     location_url = (
-        f"{EODH_DOMAIN}/api/catalogue/user/catalogs/{workspace}/catalogs/commercial-data/"
+        f"{EODH_DOMAIN}/api/catalogue/stac/catalogs/user/catalogs/{workspace}/catalogs/commercial-data/"
         f"catalogs/{catalog.value}/collections/{collection.value}/items/{item}"
     )
 
