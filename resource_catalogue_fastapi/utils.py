@@ -213,12 +213,12 @@ def upload_stac_hierarchy_for_order(
 ):
     """Upload an item and its associated collection and catalog to the workspace to track an order"""
     collection_description = (
-        f"Purchased {collection_id.capitalize().replace('_', ' ')}, including both "
-        f"completed purchases and ongoing order records"
+        f"Order records for {collection_id.capitalize().replace('_', ' ')}, including completed "
+        f"purchases with their associated assets, as well as records of ongoing and failed orders."
     )
     catalog_description = (
-        f"Purchased {catalog_id.capitalize()} data, including both completed purchases "
-        f"and ongoing order records"
+        f"Order records for {catalog_id.capitalize()}, including completed purchases with their "
+        f"associated assets, as well as records of ongoing and failed orders."
     )
 
     # Fetch the STAC item
