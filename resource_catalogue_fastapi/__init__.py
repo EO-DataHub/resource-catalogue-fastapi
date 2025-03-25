@@ -670,11 +670,13 @@ async def order_item(
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
     order_options = {
-        "productBundle": radar_options if radar_options else product_bundle.value,
+        "productBundle": product_bundle.value,
         "coordinates": order_request.coordinates if order_request.coordinates else None,
         "endUser": {"country": order_request.endUserCountry, "endUserName": username},
         "licence": licence.airbus_value if licence else None,
     }
+    if radar_options:
+        order_options["radarOptions"] = radar_options
     added_keys, stac_item_key, transformed_item_key, item_data = upload_stac_hierarchy_for_order(
         base_item_url, catalog.value, collection.value, item, workspace, order_options, S3_BUCKET
     )

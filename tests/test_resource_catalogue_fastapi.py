@@ -159,8 +159,8 @@ def test_order_item_success_airbus_sar(
             order_options = properties.get("order_options")
             assert order_options.get("endUser").get("endUserName") == "test_user"
             assert order_options.get("licence") == "Single User License"
-            assert order_options.get("productBundle").get("product_type") == "SSC"
-            assert order_options.get("productBundle").get("orbit") == "rapid"
+            assert order_options.get("productBundle") == "SSC"
+            assert order_options.get("radarOptions").get("orbit") == "rapid"
             found = True
             break
 
@@ -519,8 +519,8 @@ def test_order_item_failure(
             order_options = properties.get("order_options")
             assert order_options.get("endUser").get("endUserName") == "test_user"
             assert order_options.get("licence") == "Single User License"
-            assert order_options.get("productBundle").get("product_type") == "SSC"
-            assert order_options.get("productBundle").get("orbit") == "rapid"
+            assert order_options.get("productBundle") == "SSC"
+            assert order_options.get("radarOptions").get("orbit") == "rapid"
             found = True
             break
     assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
