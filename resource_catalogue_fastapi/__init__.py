@@ -454,6 +454,21 @@ def upload_nested_files(
     return keys, ordered_item_key
 
 
+@app.get("/manage/health", summary="Health Check")
+async def health_check():
+    """Health check endpoint to verify Airbus client connectivity"""
+    try:
+        access_token = airbus_client.generate_access_token()
+        if isinstance(access_token, str):
+            return JSONResponse(content={"status": "healthy"}, status_code=200)
+        else:
+            raise HTTPException(
+                status_code=500, detail="Airbus client failed to generate a valid access token"
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}") from e
+
+
 @app.post(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
