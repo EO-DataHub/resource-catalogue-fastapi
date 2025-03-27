@@ -1039,13 +1039,8 @@ async def get_quicklook(collection: str, item: str):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.api_route(
-    [
-        "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail",
-        "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail",
-    ],
-    methods=["GET"],
-)
+@app.get("/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail")
+@app.get("/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail")
 async def get_airbus_collection_thumbnail(collection: str):
     """Endpoint to get the thumbnail of an Airbus collection"""
     # Thumbnail is a local file, return it directly
