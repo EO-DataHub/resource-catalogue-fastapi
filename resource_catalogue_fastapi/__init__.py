@@ -7,7 +7,7 @@ from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
 
 import requests
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
@@ -1037,3 +1037,14 @@ async def get_quicklook(collection: str, item: str):
 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail")
+@app.get("/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail")
+async def get_airbus_collection_thumbnail(collection: str):
+    """Endpoint to get the thumbnail of an Airbus collection"""
+    # Thumbnail is a local file, return it directly
+    thumbnail_path = f"resource_catalogue_fastapi/thumbnails/{collection}.jpg"
+    if not os.path.exists(thumbnail_path):
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    return FileResponse(thumbnail_path)
