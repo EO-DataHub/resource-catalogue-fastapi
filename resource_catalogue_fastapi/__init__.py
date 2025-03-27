@@ -1044,7 +1044,7 @@ async def get_quicklook(collection: str, item: str):
 async def get_airbus_collection_thumbnail(collection: str):
     """Endpoint to get the thumbnail of an Airbus collection"""
     # Thumbnail is a local file, return it directly
-    thumbnail_path = f"thumbnails/{collection}.png"
+    thumbnail_path = f"resource_catalogue_fastapi/thumbnails/{collection}.jpg"
     if not os.path.exists(thumbnail_path):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return FileResponse(thumbnail_path)
