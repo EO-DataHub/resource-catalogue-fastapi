@@ -704,3 +704,11 @@ def test_quote_from_planet(requests_mock):
     )
 
     assert response.__dict__ == expected
+
+
+def test_thumbnail_airbus_collection():
+    response = client.get(
+        "stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/thumbnail",
+    )
+    assert response.status_code == 200
+    assert response.headers["Content-Type"] == "image/jpeg"
