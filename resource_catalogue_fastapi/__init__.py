@@ -1013,6 +1013,15 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     )
 
 
+# Support multiple paths for backward compatibility. Set to commercial when data is properly ingested
+@app.get(
+    "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+@app.get(
+    "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
 @app.get(
     "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail",
     dependencies=[Depends(ensure_user_logged_in)],
@@ -1026,6 +1035,15 @@ async def get_thumbnail(collection: str, item: str):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+# Support multiple paths for backward compatibility. Set to commercial when data is properly ingested
+@app.get(
+    "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+@app.get(
+    "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
 @app.get(
     "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/quicklook",
     dependencies=[Depends(ensure_user_logged_in)],
