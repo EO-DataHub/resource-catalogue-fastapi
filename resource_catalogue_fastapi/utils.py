@@ -309,8 +309,8 @@ def update_stac_order_status(stac_item: dict, order_id: str, order_status: str):
         stac_item["properties"] = {}
 
     if order_id is not None:
-        stac_item["properties"]["order.id"] = order_id
-    stac_item["properties"]["order.status"] = order_status
+        stac_item["properties"]["order:id"] = order_id
+    stac_item["properties"]["order:status"] = order_status
 
     # Update or add the STAC extension if not already present
     order_extension_url = "https://stac-extensions.github.io/order/v1.1.0/schema.json"
