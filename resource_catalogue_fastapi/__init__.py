@@ -587,7 +587,7 @@ async def update_item(
                         "id": "example-item",
                         "properties": {
                             "datetime": "2023-01-01T00:00:00Z",
-                            "order.status": "Pending",
+                            "order:status": "Pending",
                             "created": "2025-01-01T00:00:00Z",
                             "updated": "2025-01-01T00:00:00Z",
                             "order_options": {

@@ -146,13 +146,13 @@ def test_order_item_success_airbus_sar(
 
     # Assertions
     assert response.status_code == 201
-    assert response.json().get("properties").get("order.status") == "pending"
+    assert response.json().get("properties").get("order:status") == "pending"
 
-    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    # Check that one of the calls has the first argument's dict with 'order:status' set to 'pending'
     found = False
     for call_args in mock_upload_file_s3.call_args_list:
         data = json.loads(call_args[0][0])
-        if data.get("properties", {}).get("order.status") == "pending":
+        if data.get("properties", {}).get("order:status") == "pending":
             properties = data.get("properties", {})
             assert properties.get("created")
             assert properties.get("updated")
@@ -164,7 +164,7 @@ def test_order_item_success_airbus_sar(
             found = True
             break
 
-    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    assert found, "No call to upload_file_s3 with 'order:status' set to 'pending' found"
     mock_post_request.assert_called_once()
 
 
@@ -212,13 +212,13 @@ def test_order_item_success_airbus_phr(
 
     # Assertions
     assert response.status_code == 201
-    assert response.json().get("properties").get("order.status") == "pending"
+    assert response.json().get("properties").get("order:status") == "pending"
 
-    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    # Check that one of the calls has the first argument's dict with 'order:status' set to 'pending'
     found = False
     for call_args in mock_upload_file_s3.call_args_list:
         data = json.loads(call_args[0][0])
-        if data.get("properties", {}).get("order.status") == "pending":
+        if data.get("properties", {}).get("order:status") == "pending":
             properties = data.get("properties", {})
             assert properties.get("created")
             assert properties.get("updated")
@@ -229,7 +229,7 @@ def test_order_item_success_airbus_phr(
             found = True
             break
 
-    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    assert found, "No call to upload_file_s3 with 'order:status' set to 'pending' found"
     mock_post_request.assert_called_once()
 
 
@@ -281,13 +281,13 @@ def test_order_item_success_airbus_pneo(
 
     # Assertions
     assert response.status_code == 201
-    assert response.json().get("properties").get("order.status") == "pending"
+    assert response.json().get("properties").get("order:status") == "pending"
 
-    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    # Check that one of the calls has the first argument's dict with 'order:status' set to 'pending'
     found = False
     for call_args in mock_upload_file_s3.call_args_list:
         data = json.loads(call_args[0][0])
-        if data.get("properties", {}).get("order.status") == "pending":
+        if data.get("properties", {}).get("order:status") == "pending":
             properties = data.get("properties", {})
             assert properties.get("created")
             assert properties.get("updated")
@@ -299,7 +299,7 @@ def test_order_item_success_airbus_pneo(
             found = True
             break
 
-    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    assert found, "No call to upload_file_s3 with 'order:status' set to 'pending' found"
     mock_post_request.assert_called_once()
 
 
@@ -348,13 +348,13 @@ def test_order_item_success_airbus_spot(
 
     # Assertions
     assert response.status_code == 201
-    assert response.json().get("properties").get("order.status") == "pending"
+    assert response.json().get("properties").get("order:status") == "pending"
 
-    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    # Check that one of the calls has the first argument's dict with 'order:status' set to 'pending'
     found = False
     for call_args in mock_upload_file_s3.call_args_list:
         data = json.loads(call_args[0][0])
-        if data.get("properties", {}).get("order.status") == "pending":
+        if data.get("properties", {}).get("order:status") == "pending":
             properties = data.get("properties", {})
             assert properties.get("created")
             assert properties.get("updated")
@@ -365,7 +365,7 @@ def test_order_item_success_airbus_spot(
             found = True
             break
 
-    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    assert found, "No call to upload_file_s3 with 'order:status' set to 'pending' found"
     mock_post_request.assert_called_once()
 
 
@@ -412,13 +412,13 @@ def test_order_item_success_planet(
 
     # Assertions
     assert response.status_code == 201
-    assert response.json().get("properties").get("order.status") == "pending"
+    assert response.json().get("properties").get("order:status") == "pending"
 
-    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    # Check that one of the calls has the first argument's dict with 'order:status' set to 'pending'
     found = False
     for call_args in mock_upload_file_s3.call_args_list:
         data = json.loads(call_args[0][0])
-        if data.get("properties", {}).get("order.status") == "pending":
+        if data.get("properties", {}).get("order:status") == "pending":
             properties = data.get("properties", {})
             assert properties.get("created")
             assert properties.get("updated")
@@ -428,7 +428,7 @@ def test_order_item_success_planet(
             found = True
             break
 
-    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    assert found, "No call to upload_file_s3 with 'order:status' set to 'pending' found"
     mock_post_request.assert_called_once()
 
 
@@ -508,11 +508,11 @@ def test_order_item_failure(
     assert response.json() == {"detail": "Error executing order workflow"}
 
     # Verify interactions with mocks
-    # Check that one of the calls has the first argument's dict with 'order.status' set to 'pending'
+    # Check that one of the calls has the first argument's dict with 'order:status' set to 'pending'
     found = False
     for call_args in mock_upload_file_s3.call_args_list:
         data = json.loads(call_args[0][0])
-        if data.get("properties", {}).get("order.status") == "failed":
+        if data.get("properties", {}).get("order:status") == "failed":
             properties = data.get("properties", {})
             assert properties.get("created")
             assert properties.get("updated")
@@ -523,7 +523,7 @@ def test_order_item_failure(
             assert order_options.get("radarOptions").get("orbit") == "rapid"
             found = True
             break
-    assert found, "No call to upload_file_s3 with 'order.status' set to 'pending' found"
+    assert found, "No call to upload_file_s3 with 'order:status' set to 'pending' found"
     mock_post_request.assert_called_once()
 
 
