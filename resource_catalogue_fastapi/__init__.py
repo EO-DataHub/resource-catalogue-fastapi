@@ -679,7 +679,7 @@ async def order_item(
     if product_bundle:
         tag += f"_{product_bundle}"
     if radar_options:
-        tag += f"_{radar_options["product_type"]}"
+        tag += f"_{radar_options['product_type']}"
     if coordinates:
         tag += "_" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
 

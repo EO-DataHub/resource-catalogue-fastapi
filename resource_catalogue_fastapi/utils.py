@@ -213,7 +213,10 @@ def upload_stac_hierarchy_for_order(
     tag: str,
     location_url: str,
 ):
-    """If not already in progress or completed, upload an item and its associated collection and catalog to the workspace to track an order"""
+    """
+    If not already in progress or completed, upload an item and its associated collection
+    and catalog to the workspace to track an order
+    """
 
     existing_item_response = requests.get(location_url)
     existing_item_response.raise_for_status()
