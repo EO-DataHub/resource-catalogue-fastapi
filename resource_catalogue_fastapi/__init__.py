@@ -33,8 +33,8 @@ from .utils import (
     upload_stac_hierarchy_for_order,
 )
 
-from dotenv import load_dotenv
-load_dotenv()
+# from dotenv import load_dotenv
+# load_dotenv()
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
