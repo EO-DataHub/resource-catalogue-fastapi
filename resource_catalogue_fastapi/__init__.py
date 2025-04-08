@@ -1092,7 +1092,8 @@ def get_secret_keys(namespace: str, secret_name: str) -> Dict[str, str]:
 
     try:
         """Get the secret keys from a Kubernetes secret"""
-        config.load_kube_config()       # load_incluster_config()
+       # config.load_kube_config()       # load_incluster_config()
+        config.load_incluster_config()
         v1 = client.CoreV1Api()
         secret = v1.read_namespaced_secret(secret_name, namespace)
     except client.exceptions.ApiException as e:
@@ -1103,15 +1104,20 @@ def get_secret_keys(namespace: str, secret_name: str) -> Dict[str, str]:
 
 def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[bool, Optional[str]]:
 
+    print(OrderablePlanetCollection.__members__)
+    print(OrderablePlanetCollection['PSScene'])
     collection_to_provider = {
-        OrderableAirbusCollection.pneo: "airbus",
-        OrderableAirbusCollection.phr: "airbus",
-        OrderableAirbusCollection.spot: "airbus",
-        OrderableAirbusCollection.sar: "airbus",
-        OrderablePlanetCollection: "planet",
+        OrderableAirbusCollection.pneo: OrderableCatalogue.airbus.value,
+        OrderableAirbusCollection.phr: OrderableCatalogue.airbus.value,
+        OrderableAirbusCollection.spot: OrderableCatalogue.airbus.value,
+        OrderableAirbusCollection.sar: OrderableCatalogue.airbus.value,
+        'PSScene': OrderableCatalogue.planet.value,
+        'SkySatCollect': OrderableCatalogue.planet.value,
     }
 
     provider = collection_to_provider.get(collection.value)
+
+    print("PROVDER", provider)
 
     if not provider:
         return False, f"Collection {collection.value} not recognised"
@@ -1125,14 +1131,13 @@ def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[b
         return False, f"No API Key is found in workspace {workspace} for provider {provider}"
 
     # check the contract data
-    if provider == "airbus":
+    if provider == OrderableCatalogue.airbus.value:
         contracts_b64 = secret.get("contracts")
         
         if contracts_b64 is None:
             return False, f"No contract ID is found in workspace {workspace} for provider {provider}"
         
         contracts = json.loads(base64.b64decode(contracts_b64).decode("utf-8"))
-
         contracts_optical = contracts.get('optical')
         contracts_sar = contracts.get('sar')
 
