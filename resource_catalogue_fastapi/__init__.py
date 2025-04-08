@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -11,6 +12,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
+
+from kubernetes import client, config
 
 from .airbus_client import AirbusClient
 from .planet_client import PlanetClient
@@ -29,6 +32,9 @@ from .utils import (
     upload_file_s3,
     upload_stac_hierarchy_for_order,
 )
+
+from dotenv import load_dotenv
+load_dotenv()
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -680,6 +686,21 @@ async def order_item(
         # This should never occur due to the workspace access dependency
         raise HTTPException(status_code=404)
 
+    valid_api_key, err = validate_api_key(collection, workspace)
+
+    if not valid_api_key:
+        # This should never occur due to the workspace access dependency
+        return JSONResponse(
+            status_code=403,
+            content={"detail": f"You do not have access to order this item. Reason: {err}"},
+        )
+
+    return JSONResponse(
+                status_code=200,
+                content={"detail": "Stopping here"},
+            )
+
+
     authorization = request.headers.get("Authorization")
 
     order_url = str(request.url)
@@ -1066,3 +1087,77 @@ async def get_airbus_collection_thumbnail(collection: str):
     if not os.path.exists(thumbnail_path):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return FileResponse(thumbnail_path)
+
+def get_secret_keys(namespace: str, secret_name: str) -> Dict[str, str]:
+
+    try:
+        """Get the secret keys from a Kubernetes secret"""
+        config.load_kube_config()       # load_incluster_config()
+        v1 = client.CoreV1Api()
+        secret = v1.read_namespaced_secret(secret_name, namespace)
+    except client.exceptions.ApiException as e:
+        logger.error(f"Error fetching secret: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching secret")
+    
+    return secret.data
+
+def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[bool, Optional[str]]:
+
+    collection_to_provider = {
+        OrderableAirbusCollection.pneo: "airbus",
+        OrderableAirbusCollection.phr: "airbus",
+        OrderableAirbusCollection.spot: "airbus",
+        OrderableAirbusCollection.sar: "airbus",
+        OrderablePlanetCollection: "planet",
+    }
+
+    provider = collection_to_provider.get(collection.value)
+
+    if not provider:
+        return False, f"Collection {collection.value} not recognised"
+
+    try:
+        secret = get_secret_keys(f"ws-{workspace}", f"otp-{provider}")
+    except HTTPException as e:
+        return False, f"No linked-account is found in workspace {workspace} for provider {provider}"
+
+    if secret is None or secret.get('otp') is None:
+        return False, f"No API Key is found in workspace {workspace} for provider {provider}"
+
+    # check the contract data
+    if provider == "airbus":
+        contracts_b64 = secret.get("contracts")
+        
+        if contracts_b64 is None:
+            return False, f"No contract ID is found in workspace {workspace} for provider {provider}"
+        
+        contracts = json.loads(base64.b64decode(contracts_b64).decode("utf-8"))
+
+        contracts_optical = contracts.get('optical')
+        contracts_sar = contracts.get('sar')
+
+        if collection.value == OrderableAirbusCollection.sar.value:
+            if not contracts_sar:
+                return False, f"Collection {collection.value} not available to order for workspace {workspace}"
+        else:
+            if not contracts_optical:
+                logger.warning(f"Collection {collection.value} not available to order for workspace {workspace}. No Airbus Optical contract ID found")
+                return False    
+            
+            if collection.value == OrderableAirbusCollection.pneo.value:
+                # PNEO Contract
+                contract_found = any("PNEO" in v for v in str(contracts).split())
+                if contract_found:
+                    return True, None
+                else:
+                    return False, f"Airbus PNEO contract ID not found in workspace {workspace}"
+
+            if collection.value in [OrderableAirbusCollection.phr.value, OrderableAirbusCollection.spot.value]:
+                # LEGACY Contract
+                contract_found = any("LEGACY" in v for v in str(contracts).split())
+                if contract_found:
+                    return True, None
+                else:
+                    return False, f"Airbus LEGACY contract ID not found in workspace {workspace}"
+            
+    return True, None
