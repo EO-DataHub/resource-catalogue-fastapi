@@ -284,8 +284,6 @@ def upload_stac_hierarchy_for_order(
     collection_data["links"] = []
     item_data["links"] = []
 
-    tag = f"_{tag}" if tag else ""
-
     # Upload the STAC catalog, collection and item to the workspace
     catalog_name = "commercial-data"
     catalog_key = f"{workspace}/{catalog_name}/{catalog_id}.json"
