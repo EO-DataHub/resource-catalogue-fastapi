@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 from unittest.mock import MagicMock, patch
@@ -15,6 +16,13 @@ from resource_catalogue_fastapi import (
 )
 
 client = TestClient(app)
+
+# Fake Successful Contracts
+fake_contracts = {
+    "sar": True,
+    "optical": {"C12345": "My LEGACY Contract", "C67890": "My PNEO Contract"},
+}
+fake_contracts_b64 = base64.b64encode(json.dumps(fake_contracts).encode()).decode()
 
 
 @pytest.fixture(autouse=True)
@@ -100,7 +108,7 @@ def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
         b"file content", "test-bucket", "test-workspace/saved-data/file.json"
     )
 
-
+@patch("resource_catalogue_fastapi.get_linked_account_data")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
 @patch("resource_catalogue_fastapi.utils.requests.post")
@@ -114,7 +122,9 @@ def test_order_item_success_airbus_sar(
     mock_post_request,
     mock_get_file_from_url,
     mock_upload_file_s3,
+    mock_get_linked_account_data
 ):
+
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
     mock_producer = MagicMock()
@@ -130,6 +140,11 @@ def test_order_item_success_airbus_sar(
     mock_post_request.return_value = mock_response
     mock_get_request.return_value = mock_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64
+    }
 
     # Define the request payload
     payload = {
@@ -167,7 +182,7 @@ def test_order_item_success_airbus_sar(
     assert found, "No call to upload_file_s3 with 'order:status' set to 'pending' found"
     mock_post_request.assert_called_once()
 
-
+@patch("resource_catalogue_fastapi.get_linked_account_data")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
 @patch("resource_catalogue_fastapi.utils.requests.post")
@@ -181,6 +196,7 @@ def test_order_item_success_airbus_phr(
     mock_post_request,
     mock_get_file_from_url,
     mock_upload_file_s3,
+    mock_get_linked_account_data,
 ):
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
@@ -197,6 +213,11 @@ def test_order_item_success_airbus_phr(
     mock_post_request.return_value = mock_response
     mock_get_request.return_value = mock_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64
+    }
 
     # Define the request payload
     payload = {
@@ -233,6 +254,7 @@ def test_order_item_success_airbus_phr(
     mock_post_request.assert_called_once()
 
 
+@patch("resource_catalogue_fastapi.get_linked_account_data")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.validate_country_code")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
@@ -248,6 +270,7 @@ def test_order_item_success_airbus_pneo(
     mock_get_file_from_url,
     mock_upload_file_s3,
     mock_validate_country_code,
+    mock_get_linked_account_data
 ):
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
@@ -265,6 +288,11 @@ def test_order_item_success_airbus_pneo(
     mock_get_request.return_value = mock_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
     mock_validate_country_code.return_value = None
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64
+    }
 
     # Define the request payload
     payload = {
@@ -303,6 +331,7 @@ def test_order_item_success_airbus_pneo(
     mock_post_request.assert_called_once()
 
 
+@patch("resource_catalogue_fastapi.get_linked_account_data")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
 @patch("resource_catalogue_fastapi.utils.requests.post")
@@ -316,6 +345,7 @@ def test_order_item_success_airbus_spot(
     mock_post_request,
     mock_get_file_from_url,
     mock_upload_file_s3,
+    mock_get_linked_account_data
 ):
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
@@ -332,6 +362,11 @@ def test_order_item_success_airbus_spot(
     mock_post_request.return_value = mock_response
     mock_get_request.return_value = mock_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64
+    }
 
     # Define the request payload
     payload = {
@@ -369,6 +404,7 @@ def test_order_item_success_airbus_spot(
     mock_post_request.assert_called_once()
 
 
+@patch("resource_catalogue_fastapi.get_linked_account_data")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
 @patch("resource_catalogue_fastapi.utils.requests.post")
@@ -382,6 +418,7 @@ def test_order_item_success_planet(
     mock_post_request,
     mock_get_file_from_url,
     mock_upload_file_s3,
+    mock_get_linked_account_data,
 ):
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
@@ -398,6 +435,11 @@ def test_order_item_success_planet(
     mock_post_request.return_value = mock_response
     mock_get_request.return_value = mock_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64
+    }
 
     # Define the request payload
     payload = {
@@ -459,6 +501,7 @@ def test_order_item_invalid(
     assert response.status_code == 422
 
 
+@patch("resource_catalogue_fastapi.get_linked_account_data")
 @patch("resource_catalogue_fastapi.upload_file_s3")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.utils.requests.post")
@@ -472,6 +515,7 @@ def test_order_item_failure(
     mock_post_request,
     mock_utils_upload_file_s3,
     mock_upload_file_s3,
+    mock_get_linked_account_data
 ):
     # Mock the dependencies
     mock_producer = MagicMock()
@@ -489,6 +533,11 @@ def test_order_item_failure(
     mock_get_response.raise_for_status = MagicMock()
     mock_get_request.return_value = mock_get_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64
+    }
 
     # Define the request payload
     payload = {
