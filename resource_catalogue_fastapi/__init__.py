@@ -33,9 +33,6 @@ from .utils import (
     upload_stac_hierarchy_for_order,
 )
 
-# from dotenv import load_dotenv
-# load_dotenv()
-
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -686,6 +683,7 @@ async def order_item(
         # This should never occur due to the workspace access dependency
         raise HTTPException(status_code=404)
 
+    # Check if the user has a linked account and contract for the item
     valid_api_key, err = validate_api_key(collection, workspace)
 
     if not valid_api_key:
@@ -694,12 +692,6 @@ async def order_item(
             status_code=403,
             content={"detail": f"You do not have access to order this item. Reason: {err}"},
         )
-
-    return JSONResponse(
-                status_code=200,
-                content={"detail": "Stopping here"},
-            )
-
 
     authorization = request.headers.get("Authorization")
 
@@ -1088,11 +1080,10 @@ async def get_airbus_collection_thumbnail(collection: str):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return FileResponse(thumbnail_path)
 
-def get_secret_keys(namespace: str, secret_name: str) -> Dict[str, str]:
 
+def get_linked_account_data(namespace: str, secret_name: str) -> Dict[str, str]:
+    """ Get the secret keys from a Kubernetes secret"""
     try:
-        """Get the secret keys from a Kubernetes secret"""
-       # config.load_kube_config()       # load_incluster_config()
         config.load_incluster_config()
         v1 = client.CoreV1Api()
         secret = v1.read_namespaced_secret(secret_name, namespace)
@@ -1102,10 +1093,9 @@ def get_secret_keys(namespace: str, secret_name: str) -> Dict[str, str]:
     
     return secret.data
 
-def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[bool, Optional[str]]:
 
-    print(OrderablePlanetCollection.__members__)
-    print(OrderablePlanetCollection['PSScene'])
+def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[bool, Optional[str]]:
+    """ Check if the user has a linked account and contract for the item"""
     collection_to_provider = {
         OrderableAirbusCollection.pneo: OrderableCatalogue.airbus.value,
         OrderableAirbusCollection.phr: OrderableCatalogue.airbus.value,
@@ -1117,20 +1107,18 @@ def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[b
 
     provider = collection_to_provider.get(collection.value)
 
-    print("PROVDER", provider)
-
     if not provider:
         return False, f"Collection {collection.value} not recognised"
 
     try:
-        secret = get_secret_keys(f"ws-{workspace}", f"otp-{provider}")
+        secret = get_linked_account_data(f"ws-{workspace}", f"otp-{provider}")
     except HTTPException as e:
         return False, f"No linked-account is found in workspace {workspace} for provider {provider}"
 
     if secret is None or secret.get('otp') is None:
         return False, f"No API Key is found in workspace {workspace} for provider {provider}"
 
-    # check the contract data
+    # Check the contract data - Airbus only
     if provider == OrderableCatalogue.airbus.value:
         contracts_b64 = secret.get("contracts")
         
@@ -1143,11 +1131,10 @@ def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[b
 
         if collection.value == OrderableAirbusCollection.sar.value:
             if not contracts_sar:
-                return False, f"Collection {collection.value} not available to order for workspace {workspace}"
+                return False, f"Collection {collection.value} not available to order for workspace {workspace}."
         else:
             if not contracts_optical:
-                logger.warning(f"Collection {collection.value} not available to order for workspace {workspace}. No Airbus Optical contract ID found")
-                return False    
+                return False , f"Collection {collection.value} not available to order for workspace {workspace}. No Airbus Optical contract ID found"   
             
             if collection.value == OrderableAirbusCollection.pneo.value:
                 # PNEO Contract
