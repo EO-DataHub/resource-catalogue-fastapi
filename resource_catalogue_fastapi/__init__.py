@@ -677,7 +677,7 @@ async def order_item(
 
     tag = ""
     if product_bundle:
-        tag += f"_{product_bundle}"
+        tag += f"_{product_bundle.value}"
     if radar_options:
         tag += f"_{radar_options['product_type']}"
     if coordinates:

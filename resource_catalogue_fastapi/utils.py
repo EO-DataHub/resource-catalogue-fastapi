@@ -218,7 +218,7 @@ def upload_stac_hierarchy_for_order(
     and catalog to the workspace to track an order
     """
 
-    existing_item_response = requests.get(location_url)
+    existing_item_response = requests.get(f"https://{location_url}")
     existing_item_response.raise_for_status()
     existing_item_data = existing_item_response.json()
 
