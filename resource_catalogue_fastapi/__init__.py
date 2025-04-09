@@ -41,6 +41,9 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
+# Cluster prefix to pass into the data adaptor
+CLUSTER_PREFIX = os.getenv("CLUSTER_PREFIX", None)
+
 # Domain for workspaces, used for OPA policy check
 WORKSPACES_DOMAIN = os.getenv("WORKSPACES_DOMAIN", "workspaces.dev.eodhp.eco-ke-staging.com")
 
@@ -772,6 +775,7 @@ async def order_item(
             order_request.coordinates,
             end_users,
             licence.airbus_value if licence else None,
+            CLUSTER_PREFIX,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:

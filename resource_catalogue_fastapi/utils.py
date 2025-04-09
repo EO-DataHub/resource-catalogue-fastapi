@@ -334,6 +334,7 @@ def execute_order_workflow(
     coordinates: list,
     end_users: Optional[List],
     licence: Optional[str],
+    cluster_prefix: str,
 ):
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
@@ -348,6 +349,7 @@ def execute_order_workflow(
     payload = {
         "inputs": {
             "workspace": user_workspace,
+            "cluster_prefix": cluster_prefix,
             "workspace_bucket": workspace_bucket,
             "commercial_data_bucket": commercial_data_bucket,
             "pulsar_url": pulsar_url,
