@@ -10,28 +10,19 @@ import requests
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from kubernetes import client, config
 from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
 
-from kubernetes import client, config
-
 from .airbus_client import AirbusClient
 from .planet_client import PlanetClient
-from .utils import (
-    OrderStatus,
-    check_user_can_access_a_workspace,
-    check_user_can_access_requested_workspace,
-    delete_file_s3,
-    execute_order_workflow,
-    get_file_from_url,
-    get_nested_files_from_url,
-    get_path_params,
-    get_user_details,
-    rate_limiter_dependency,
-    update_stac_order_status,
-    upload_file_s3,
-    upload_stac_hierarchy_for_order,
-)
+from .utils import (OrderStatus, check_user_can_access_a_workspace,
+                    check_user_can_access_requested_workspace, delete_file_s3,
+                    execute_order_workflow, get_file_from_url,
+                    get_nested_files_from_url, get_path_params,
+                    get_user_details, rate_limiter_dependency,
+                    update_stac_order_status, upload_file_s3,
+                    upload_stac_hierarchy_for_order)
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -1089,7 +1080,7 @@ def get_linked_account_data(namespace: str, secret_name: str) -> Dict[str, str]:
         secret = v1.read_namespaced_secret(secret_name, namespace)
     except client.exceptions.ApiException as e:
         logger.error(f"Error fetching secret: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching secret")
+        raise HTTPException(status_code=500, detail="Error fetching secret") from e
 
     return secret.data
 
