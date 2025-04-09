@@ -219,7 +219,6 @@ def upload_stac_hierarchy_for_order(
     """
 
     existing_item_response = requests.get(f"https://{location_url}")
-    existing_item_response.raise_for_status()
     existing_item_data = existing_item_response.json()
 
     status = existing_item_data.get("properties", {}).get("order:status")
