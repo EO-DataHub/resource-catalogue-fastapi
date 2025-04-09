@@ -677,10 +677,13 @@ async def order_item(
 
     tag = ""
     if product_bundle:
+        logging.info("Product bundle found")
         tag += f"_{product_bundle.value}"
     if radar_options:
+        logging.info("Radar options found")
         tag += f"_{radar_options['product_type']}"
     if coordinates:
+        logging.info("Coordinates found")
         tag += "_" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
 
     username, workspaces = get_user_details(request)
@@ -723,13 +726,17 @@ async def order_item(
         )
     )
 
+    logging.info(f"Status: {status}")
+
     if status in ["succeeded", "pending"]:
+        message = f"Order not placed. Current item status is {status}"
+        logging.info(message)
         return JSONResponse(
             content=item_data,
             status_code=200,
             headers={
                 "Location": location_url,
-                "Message": f"Order not placed. Current item status is {status}",
+                "Message": message,
             },
         )
 
