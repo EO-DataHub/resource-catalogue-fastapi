@@ -1082,7 +1082,7 @@ async def get_airbus_collection_thumbnail(collection: str):
 
 
 def get_linked_account_data(namespace: str, secret_name: str) -> Dict[str, str]:
-    """ Get the secret keys from a Kubernetes secret"""
+    """Get the secret keys from a Kubernetes secret"""
     try:
         config.load_incluster_config()
         v1 = client.CoreV1Api()
@@ -1090,19 +1090,19 @@ def get_linked_account_data(namespace: str, secret_name: str) -> Dict[str, str]:
     except client.exceptions.ApiException as e:
         logger.error(f"Error fetching secret: {e}")
         raise HTTPException(status_code=500, detail="Error fetching secret")
-    
+
     return secret.data
 
 
 def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[bool, Optional[str]]:
-    """ Check if the user has a linked account and contract for the item"""
+    """Check if the user has a linked account and contract for the item"""
     collection_to_provider = {
         OrderableAirbusCollection.pneo: OrderableCatalogue.airbus.value,
         OrderableAirbusCollection.phr: OrderableCatalogue.airbus.value,
         OrderableAirbusCollection.spot: OrderableCatalogue.airbus.value,
         OrderableAirbusCollection.sar: OrderableCatalogue.airbus.value,
-        'PSScene': OrderableCatalogue.planet.value,
-        'SkySatCollect': OrderableCatalogue.planet.value,
+        "PSScene": OrderableCatalogue.planet.value,
+        "SkySatCollect": OrderableCatalogue.planet.value,
     }
 
     provider = collection_to_provider.get(collection.value)
@@ -1115,27 +1115,36 @@ def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[b
     except HTTPException as e:
         return False, f"No linked-account is found in workspace {workspace} for provider {provider}"
 
-    if secret is None or secret.get('otp') is None:
+    if secret is None or secret.get("otp") is None:
         return False, f"No API Key is found in workspace {workspace} for provider {provider}"
 
     # Check the contract data - Airbus only
     if provider == OrderableCatalogue.airbus.value:
         contracts_b64 = secret.get("contracts")
-        
+
         if contracts_b64 is None:
-            return False, f"No contract ID is found in workspace {workspace} for provider {provider}"
-        
+            return (
+                False,
+                f"No contract ID is found in workspace {workspace} for provider {provider}",
+            )
+
         contracts = json.loads(base64.b64decode(contracts_b64).decode("utf-8"))
-        contracts_optical = contracts.get('optical')
-        contracts_sar = contracts.get('sar')
+        contracts_optical = contracts.get("optical")
+        contracts_sar = contracts.get("sar")
 
         if collection.value == OrderableAirbusCollection.sar.value:
             if not contracts_sar:
-                return False, f"Collection {collection.value} not available to order for workspace {workspace}."
+                return (
+                    False,
+                    f"Collection {collection.value} not available to order for workspace {workspace}.",
+                )
         else:
             if not contracts_optical:
-                return False , f"Collection {collection.value} not available to order for workspace {workspace}. No Airbus Optical contract ID found"   
-            
+                return (
+                    False,
+                    f"Collection {collection.value} not available to order for workspace {workspace}. No Airbus Optical contract ID found",
+                )
+
             if collection.value == OrderableAirbusCollection.pneo.value:
                 # PNEO Contract
                 contract_found = any("PNEO" in v for v in str(contracts).split())
@@ -1144,12 +1153,15 @@ def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[b
                 else:
                     return False, f"Airbus PNEO contract ID not found in workspace {workspace}"
 
-            if collection.value in [OrderableAirbusCollection.phr.value, OrderableAirbusCollection.spot.value]:
+            if collection.value in [
+                OrderableAirbusCollection.phr.value,
+                OrderableAirbusCollection.spot.value,
+            ]:
                 # LEGACY Contract
                 contract_found = any("LEGACY" in v for v in str(contracts).split())
                 if contract_found:
                     return True, None
                 else:
                     return False, f"Airbus LEGACY contract ID not found in workspace {workspace}"
-            
+
     return True, None
