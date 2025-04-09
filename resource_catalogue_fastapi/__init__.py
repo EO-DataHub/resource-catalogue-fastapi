@@ -1103,7 +1103,7 @@ def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[b
 
     try:
         secret = get_linked_account_data(f"ws-{workspace}", f"otp-{provider}")
-    except HTTPException as e:
+    except HTTPException:
         return False, f"No linked-account is found in workspace {workspace} for provider {provider}"
 
     if secret is None or secret.get("otp") is None:
@@ -1133,7 +1133,8 @@ def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[b
             if not contracts_optical:
                 return (
                     False,
-                    f"Collection {collection.value} not available to order for workspace {workspace}. No Airbus Optical contract ID found",
+                    f"""Collection {collection.value} not available to order for workspace {workspace}.
+                    No Airbus Optical contract ID found""",
                 )
 
             if collection.value == OrderableAirbusCollection.pneo.value:
