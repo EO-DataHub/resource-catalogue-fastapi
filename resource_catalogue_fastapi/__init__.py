@@ -678,13 +678,14 @@ async def order_item(
     tag = ""
     if product_bundle:
         logging.info("Product bundle found")
-        tag += f"_{product_bundle.value}"
+        tag += f"-{product_bundle.value}"
     if radar_options:
         logging.info("Radar options found")
-        tag += f"_{radar_options['product_type']}"
+        tag += f"-{radar_options['product_type']}"
     if coordinates:
         logging.info("Coordinates found")
-        tag += "_" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
+        tag += "-" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
+    tag = f"_{tag[1:]}"  # remove first character (hyphen), replace with underscore
 
     username, workspaces = get_user_details(request)
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
