@@ -704,7 +704,7 @@ async def order_item(
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
     order_options = {
-        "productBundle": product_bundle.value,
+        "productBundle2": product_bundle.value,  # don't upload with this line
         "coordinates": coordinates,
         "endUser": {"country": order_request.endUserCountry, "endUserName": username},
         "licence": licence.airbus_value if licence else None,
@@ -788,7 +788,7 @@ async def order_item(
         adaptor_name = "planet-adaptor"
         commercial_data_bucket = S3_BUCKET
 
-    product_bundle_value = product_bundle.value + '2'    # don't merge with this line
+    product_bundle_value = product_bundle.value
     if radar_options:
         product_bundle_value = json.dumps(radar_options)
     try:
