@@ -788,7 +788,7 @@ async def order_item(
         adaptor_name = "planet-adaptor"
         commercial_data_bucket = S3_BUCKET
 
-    product_bundle_value = product_bundle.value
+    product_bundle_value = product_bundle.value + '2'    # don't merge with this line
     if radar_options:
         product_bundle_value = json.dumps(radar_options)
     try:
