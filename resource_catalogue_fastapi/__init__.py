@@ -681,7 +681,12 @@ async def order_item(
         tag += f"-{product_bundle.value}"
     if radar_options:
         logging.info("Radar options found")
-        tag += f"-{radar_options['product_type']}"
+        if orbit := radar_options.get("orbit"):
+            tag += "-" + orbit
+        if resolution_variant := radar_options.get("resolutionVariant"):
+            tag += "-" + resolution_variant
+        if projection := radar_options.get("projection"):
+            tag += "-" + projection
     if coordinates:
         logging.info("Coordinates found")
         tag += "-" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
