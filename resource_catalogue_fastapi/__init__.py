@@ -125,7 +125,7 @@ def ensure_user_logged_in(request: Request):
         logger.info("Logged in as user: %s", username)
 
         if not username:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=401, detail="Unauthorised")
 
 
 class ParentCatalogue(str, Enum):
