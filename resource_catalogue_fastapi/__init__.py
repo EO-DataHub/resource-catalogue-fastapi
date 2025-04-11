@@ -709,7 +709,7 @@ async def order_item(
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
     order_options = {
-        "productBundle2": product_bundle.value,  # don't upload with this line
+        "productBundle": product_bundle.value,
         "coordinates": coordinates,
         "endUser": {"country": order_request.endUserCountry, "endUserName": username},
         "licence": licence.airbus_value if licence else None,

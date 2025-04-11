@@ -239,7 +239,7 @@ def upload_stac_hierarchy_for_order(
     item_response.raise_for_status()
     item_data = item_response.json()
 
-    item_data["id"] = item_data["id"] + tag
+    item_data["id"] = item_data.get("id", "") + tag
 
     update_stac_order_status(item_data, None, OrderStatus.PENDING.value)
     item_data["assets"] = {}
