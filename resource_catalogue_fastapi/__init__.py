@@ -711,7 +711,6 @@ async def order_item(
     }
     if radar_options:
         order_options["radarOptions"] = radar_options
-        tag = str(hashlib.md5(str(radar_options).encode("utf-8")).hexdigest())
 
     status, added_keys, stac_item_key, transformed_item_key, item_data = (
         upload_stac_hierarchy_for_order(
