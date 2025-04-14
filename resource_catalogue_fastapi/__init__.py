@@ -734,7 +734,7 @@ async def order_item(
     logging.info(f"Status: {status}")
 
     if status in [OrderStatus.SUCCEEDED.value, OrderStatus.PENDING.value,  OrderStatus.ORDERED.value]:
-        message = f"Order not placed. Current item status is {status}"
+        message = f"An order already exists for these parameters with status {status}"
         logging.info(message)
         return JSONResponse(
             content=item_data,
