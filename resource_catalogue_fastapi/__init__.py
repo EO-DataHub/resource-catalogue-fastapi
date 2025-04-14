@@ -809,7 +809,7 @@ def quote(
                         [[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]
                     ],
                     "licence": "Standard",
-                    "product_bundle": "General use",
+                    "productBundle": "General use",
                 }
             ],
         ),
@@ -820,7 +820,7 @@ def quote(
     * coordinates: (optional) Coordinates to limit the AOI of the item for purchase where possible.
       Given in the same nested format as STAC
     * licence: (Airbus-only) The licence type for the order
-    * product_bundle: (optional, default=General use") Product bundle requested for order
+    * productBundle: (optional, default=General use") Product bundle requested for order
     """
 
     coordinates = body.coordinates
