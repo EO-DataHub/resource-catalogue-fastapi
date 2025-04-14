@@ -733,7 +733,7 @@ async def order_item(
 
     logging.info(f"Status: {status}")
 
-    if status in ["succeeded", "pending"]:
+    if status in [OrderStatus.SUCCEEDED.value, OrderStatus.PENDING.value,  OrderStatus.ORDERED.value]:
         message = f"Order not placed. Current item status is {status}"
         logging.info(message)
         return JSONResponse(

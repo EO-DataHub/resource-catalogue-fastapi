@@ -24,7 +24,6 @@ WORKSPACES_CLAIM_PATH = os.getenv("WORKSPACES_CLAIM_PATH", "workspaces")
 
 class OrderStatus(str, Enum):
     """Valid order statuses from the order STAC extension"""
-
     ORDERABLE = "orderable"
     ORDERED = "ordered"
     PENDING = "pending"
