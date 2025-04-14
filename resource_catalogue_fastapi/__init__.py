@@ -677,10 +677,10 @@ async def order_item(
 
     tag = ""
     if product_bundle:
-        logging.info("Product bundle found")
+        logging.info(f"Product bundle found: {product_bundle}")
         tag += f"-{product_bundle.value}"
     if radar_options:
-        logging.info("Radar options found")
+        logging.info(f"Radar options found: {radar_options}")
         if orbit := radar_options.get("orbit"):
             tag += "-" + orbit
         if resolution_variant := radar_options.get("resolutionVariant"):
@@ -688,7 +688,7 @@ async def order_item(
         if projection := radar_options.get("projection"):
             tag += "-" + projection
     if coordinates:
-        logging.info("Coordinates found")
+        logging.info(f"Coordinates found: {coordinates}")
         tag += "-" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
     tag = f"_{tag[1:]}"  # remove first character (hyphen), replace with underscore
 
