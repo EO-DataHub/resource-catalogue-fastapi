@@ -210,8 +210,21 @@ def upload_stac_hierarchy_for_order(
     workspace: str,
     order_options: dict,
     bucket: str,
+    tag: str,
+    location_url: str,
 ):
-    """Upload an item and its associated collection and catalog to the workspace to track an order"""
+    """
+    If not already in progress or completed, upload an item and its associated collection
+    and catalog to the workspace to track an order
+    """
+
+    existing_item_response = requests.get(f"https://{location_url}")
+    existing_item_data = existing_item_response.json()
+
+    status = existing_item_data.get("properties", {}).get("order:status")
+    if status in ["succeeded", "pending"]:
+        return status, [], "", "", existing_item_data
+
     collection_description = (
         f"Order records for {collection_id.capitalize().replace('_', ' ')}, including completed "
         f"purchases with their associated assets, as well as records of ongoing and failed orders."
@@ -225,6 +238,8 @@ def upload_stac_hierarchy_for_order(
     item_response = requests.get(base_item_url)
     item_response.raise_for_status()
     item_data = item_response.json()
+
+    item_data["id"] = item_data.get("id", "") + tag
 
     update_stac_order_status(item_data, None, OrderStatus.PENDING.value)
     item_data["assets"] = {}
@@ -275,7 +290,7 @@ def upload_stac_hierarchy_for_order(
     catalog_name = "commercial-data"
     catalog_key = f"{workspace}/{catalog_name}/{catalog_id}.json"
     collection_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}.json"
-    item_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}/{item_id}.json"
+    item_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}/{item_id}{tag}.json"
 
     transformed_catalog_key = (
         f"transformed/catalogs/user/catalogs/{workspace}/catalogs/{catalog_name}/catalogs/"
@@ -287,8 +302,9 @@ def upload_stac_hierarchy_for_order(
     )
     transformed_item_key = (
         f"transformed/catalogs/user/catalogs/{workspace}/catalogs/{catalog_name}/catalogs/"
-        f"{catalog_id}/collections/{collection_id}/items/{item_id}.json"
+        f"{catalog_id}/collections/{collection_id}/items/{item_id}{tag}.json"
     )
+
     added_keys = [transformed_catalog_key, transformed_collection_key, transformed_item_key]
     # Upload files as reference for the user
     upload_file_s3(json.dumps(catalog_data), bucket, catalog_key)
@@ -299,7 +315,7 @@ def upload_stac_hierarchy_for_order(
     upload_file_s3(json.dumps(collection_data), bucket, transformed_collection_key)
     upload_file_s3(json.dumps(item_data), bucket, transformed_item_key)
 
-    return added_keys, item_key, transformed_item_key, item_data
+    return status, added_keys, item_key, transformed_item_key, item_data
 
 
 def update_stac_order_status(stac_item: dict, order_id: str, order_status: str):

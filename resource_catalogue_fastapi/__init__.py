@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -124,7 +125,7 @@ def ensure_user_logged_in(request: Request):
         logger.info("Logged in as user: %s", username)
 
         if not username:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=401, detail="Unauthorised")
 
 
 class ParentCatalogue(str, Enum):
@@ -672,6 +673,24 @@ async def order_item(
     radar_options = validate_radar_options(
         collection.value, order_request.radarOptions, product_bundle.value
     )
+    coordinates = order_request.coordinates if order_request.coordinates else None
+
+    tag = ""
+    if product_bundle:
+        logging.info(f"Product bundle found: {product_bundle}")
+        tag += f"-{product_bundle.value}"
+    if radar_options:
+        logging.info(f"Radar options found: {radar_options}")
+        if orbit := radar_options.get("orbit"):
+            tag += "-" + orbit
+        if resolution_variant := radar_options.get("resolutionVariant"):
+            tag += "-" + resolution_variant
+        if projection := radar_options.get("projection"):
+            tag += "-" + projection
+    if coordinates:
+        logging.info(f"Coordinates found: {coordinates}")
+        tag += "-" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
+    tag = f"_{tag[1:]}"  # remove first character (hyphen), replace with underscore
 
     username, workspaces = get_user_details(request)
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
@@ -680,21 +699,55 @@ async def order_item(
         # This should never occur due to the workspace access dependency
         raise HTTPException(status_code=404)
 
+    location_url = (
+        f"{EODH_DOMAIN}/api/catalogue/stac/catalogs/user/catalogs/{workspace}/catalogs/commercial-data/"
+        f"catalogs/{catalog.value}/collections/{collection.value}/items/{item}{tag}"
+    )
+
     authorization = request.headers.get("Authorization")
 
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
     order_options = {
         "productBundle": product_bundle.value,
-        "coordinates": order_request.coordinates if order_request.coordinates else None,
+        "coordinates": coordinates,
         "endUser": {"country": order_request.endUserCountry, "endUserName": username},
         "licence": licence.airbus_value if licence else None,
     }
     if radar_options:
         order_options["radarOptions"] = radar_options
-    added_keys, stac_item_key, transformed_item_key, item_data = upload_stac_hierarchy_for_order(
-        base_item_url, catalog.value, collection.value, item, workspace, order_options, S3_BUCKET
+
+    status, added_keys, stac_item_key, transformed_item_key, item_data = (
+        upload_stac_hierarchy_for_order(
+            base_item_url,
+            catalog.value,
+            collection.value,
+            item,
+            workspace,
+            order_options,
+            S3_BUCKET,
+            tag,
+            location_url,
+        )
     )
+
+    logging.info(f"Status: {status}")
+
+    if status in [
+        OrderStatus.SUCCEEDED.value,
+        OrderStatus.PENDING.value,
+        OrderStatus.ORDERED.value,
+    ]:
+        message = f"An order already exists for these parameters with status {status}"
+        logging.info(message)
+        return JSONResponse(
+            content=item_data,
+            status_code=200,
+            headers={
+                "Location": location_url,
+                "Message": message,
+            },
+        )
 
     # Check if the item is a multi or stereo PNEO order
     if collection.value == OrderableAirbusCollection.pneo and (
@@ -773,11 +826,6 @@ async def order_item(
 
     logger.info(f"Sending message to pulsar: {output_data}")
     producer.send((json.dumps(output_data)).encode("utf-8"))
-
-    location_url = (
-        f"{EODH_DOMAIN}/api/catalogue/stac/catalogs/user/catalogs/{workspace}/catalogs/commercial-data/"
-        f"catalogs/{catalog.value}/collections/{collection.value}/items/{item}"
-    )
 
     return JSONResponse(content=item_data, status_code=201, headers={"Location": location_url})
 
