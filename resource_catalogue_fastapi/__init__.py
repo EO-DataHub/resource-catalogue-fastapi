@@ -148,7 +148,9 @@ class OrderableCatalogue(str, Enum):
     airbus = "airbus"
 
 
-OrderablePlanetCollection = Enum("OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS})
+OrderablePlanetCollection = Enum(
+    "OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS}
+)
 
 
 class OrderableAirbusCollection(str, Enum):
@@ -316,7 +318,9 @@ class QuoteResponse(BaseModel):
     message: Optional[str] = None
 
 
-def validate_licence(collection: str, licence: str) -> Optional[Union[LicenceOptical, LicenceRadar]]:
+def validate_licence(
+    collection: str, licence: str
+) -> Optional[Union[LicenceOptical, LicenceRadar]]:
     """Validate the licence type against allowed values for the collection"""
     if collection == OrderableAirbusCollection.sar.value:
         allowed_licences = {e.value for e in LicenceRadar}
@@ -348,7 +352,9 @@ def validate_licence(collection: str, licence: str) -> Optional[Union[LicenceOpt
     return None
 
 
-def validate_product_bundle(collection: str, product_bundle: str) -> Union[ProductBundle, ProductBundleRadar]:
+def validate_product_bundle(
+    collection: str, product_bundle: str
+) -> Union[ProductBundle, ProductBundleRadar]:
     """Validate the product bundle against allowed values for the collection"""
     if collection == OrderableAirbusCollection.sar.value:
         allowed_bundles = {e.value for e in ProductBundleRadar}
@@ -412,7 +418,8 @@ def validate_radar_options(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Projection should not be provided for a radar item when the product bundle is " "SSC or MGD."
+                "Projection should not be provided for a radar item when the product bundle is "
+                "SSC or MGD."
             ),
         )
     radar_bundle = radar_options.model_dump()
@@ -586,7 +593,9 @@ async def update_item(
                     "example": {
                         "type": "Feature",
                         "stac_version": "1.0.0",
-                        "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"],
+                        "stac_extensions": [
+                            "https://stac-extensions.github.io/order/v1.1.0/schema.json"
+                        ],
                         "id": "example-item",
                         "properties": {
                             "datetime": "2023-01-01T00:00:00Z",
@@ -672,7 +681,9 @@ async def order_item(
 
     licence = validate_licence(collection.value, order_request.licence)
     product_bundle = validate_product_bundle(collection.value, order_request.productBundle)
-    radar_options = validate_radar_options(collection.value, order_request.radarOptions, product_bundle.value)
+    radar_options = validate_radar_options(
+        collection.value, order_request.radarOptions, product_bundle.value
+    )
     coordinates = order_request.coordinates if order_request.coordinates else None
 
     tag = ""
@@ -726,16 +737,18 @@ async def order_item(
     if radar_options:
         order_options["radarOptions"] = radar_options
 
-    status, added_keys, stac_item_key, transformed_item_key, item_data = upload_stac_hierarchy_for_order(
-        base_item_url,
-        catalog.value,
-        collection.value,
-        item,
-        workspace,
-        order_options,
-        S3_BUCKET,
-        tag,
-        location_url,
+    status, added_keys, stac_item_key, transformed_item_key, item_data = (
+        upload_stac_hierarchy_for_order(
+            base_item_url,
+            catalog.value,
+            collection.value,
+            item,
+            workspace,
+            order_options,
+            S3_BUCKET,
+            tag,
+            location_url,
+        )
     )
 
     logging.info(f"Status: {status}")
@@ -768,7 +781,9 @@ async def order_item(
         )
 
     # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders
-    optical_collections = {e.value for e in OrderableAirbusCollection if e != OrderableAirbusCollection.sar}
+    optical_collections = {
+        e.value for e in OrderableAirbusCollection if e != OrderableAirbusCollection.sar
+    }
     end_users = None
     if collection.value in optical_collections:
         end_users = []
@@ -854,7 +869,9 @@ def quote(
         Body(
             examples=[
                 {
-                    "coordinates": [[[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]],
+                    "coordinates": [
+                        [[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]
+                    ],
                     "licence": "Standard",
                     "productBundle": "General use",
                 }
@@ -1003,11 +1020,15 @@ def quote(
         else:
             return JSONResponse(
                 status_code=404,
-                content={"detail": f"Collection {collection.value} not recognised as an Airbus collection"},
+                content={
+                    "detail": f"Collection {collection.value} not recognised as an Airbus collection"
+                },
             )
         access_token = airbus_client.generate_access_token()
         if not access_token:
-            return JSONResponse(status_code=500, content={"detail": "Failed to generate access token"})
+            return JSONResponse(
+                status_code=500, content={"detail": "Failed to generate access token"}
+            )
 
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
@@ -1034,14 +1055,18 @@ def quote(
         if price_json:
             return QuoteResponse(value=price_json["value"], units=price_json["units"])
 
-        return JSONResponse(status_code=404, content={"detail": "Quote not found for given acquisition ID"})
+        return JSONResponse(
+            status_code=404, content={"detail": "Quote not found for given acquisition ID"}
+        )
 
     elif catalog.value == OrderableCatalogue.planet.value:
         try:
             if (collection.value, product_bundle) in product_bundle_no_aoi:
                 # Not all product bundles allow clipping
                 coordinates = []
-                message = "No AOI clipping available for this collection and product bundle combination"
+                message = (
+                    "No AOI clipping available for this collection and product bundle combination"
+                )
 
             area = planet_client.get_area_estimate(item, collection.value, coordinates)
 
@@ -1240,7 +1265,9 @@ def validate_linked_account(
 
             if collection.value == OrderableAirbusCollection.pneo.value:
                 # PNEO Contract
-                contract_id = next((key for key, value in contracts_optical.items() if "PNEO" in value), None)
+                contract_id = next(
+                    (key for key, value in contracts_optical.items() if "PNEO" in value), None
+                )
                 if contract_id is not None:
                     return contract_id, None
                 else:
