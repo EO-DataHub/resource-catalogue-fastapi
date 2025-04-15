@@ -1101,8 +1101,7 @@ async def get_airbus_collection_thumbnail(collection: str):
 def get_linked_account_data(namespace: str, secret_name: str) -> Dict[str, str]:
     """Get the secret keys from a Kubernetes secret"""
     try:
-        #config.load_incluster_config()
-        config.load_kube_config()
+        config.load_incluster_config()
         v1 = client.CoreV1Api()
         secret = v1.read_namespaced_secret(secret_name, namespace)
     except client.exceptions.ApiException as e:
