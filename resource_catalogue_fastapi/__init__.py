@@ -686,10 +686,9 @@ async def order_item(
         raise HTTPException(status_code=404)
 
     # Check if the user has a linked account and contract for the item
-    valid_api_key, err = validate_api_key(collection, workspace)
+    _, err = validate_linked_account(collection, workspace)
 
-    if not valid_api_key:
-        # This should never occur due to the workspace access dependency
+    if err is not None:
         return JSONResponse(
             status_code=403,
             content={"detail": f"You do not have access to order this item. Reason: {err}"},
@@ -838,6 +837,23 @@ def quote(
     base_item_url = order_url.rsplit("/quote", 1)[0]
     item_data = None
 
+    _, workspaces = get_user_details(request)
+
+    # workspaces from user details was originally a list, now usually expect string containing one workspace.
+    workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
+    if not workspace:
+        # This should never occur due to the workspace access dependency
+        raise HTTPException(status_code=404)
+    
+    # Check if the user has a linked account and contract for the item
+    contract_id, err = validate_linked_account(collection, workspace)
+
+    if err is not None:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": f"You do not have access to quote this item. Reason: {err}"},
+        )
+
     if catalog.value == OrderableCatalogue.airbus.value:
         if collection.value == OrderableAirbusCollection.sar.value:
             if AIRBUS_ENV == "prod":
@@ -849,13 +865,13 @@ def quote(
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             spectral_processing = "bundle"
             if collection.value == OrderableAirbusCollection.pneo.value:
+
                 # Check if item is part of a multi order
                 item_response = requests.get(base_item_url)
                 item_response.raise_for_status()
                 item_data = item_response.json()
 
                 product_type = "PleiadesNeoArchiveMono"
-                contract_id = "CTR24005241"
                 datastrip_id = None
                 item_uuids = [item_data.get("properties", {}).get("id")]
                 if multi_ids := item_data.get("properties", {}).get(  # noqa: F841
@@ -877,12 +893,10 @@ def quote(
                         item_uuids.append(multi_data.get("properties", {}).get("id"))
             elif collection.value == OrderableAirbusCollection.phr.value:
                 product_type = "PleiadesArchiveMono"
-                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
                 datastrip_id = item
             elif collection.value == OrderableAirbusCollection.spot.value:
                 product_type = "SPOTArchive1.5Mono"
-                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
                 datastrip_id = item
             if not coordinates:
@@ -1087,18 +1101,42 @@ async def get_airbus_collection_thumbnail(collection: str):
 def get_linked_account_data(namespace: str, secret_name: str) -> Dict[str, str]:
     """Get the secret keys from a Kubernetes secret"""
     try:
-        config.load_incluster_config()
+        #config.load_incluster_config()
+        config.load_kube_config()
         v1 = client.CoreV1Api()
         secret = v1.read_namespaced_secret(secret_name, namespace)
     except client.exceptions.ApiException as e:
         logger.error(f"Error fetching secret: {e}")
         raise HTTPException(status_code=500, detail="Error fetching secret") from e
-
     return secret.data
 
 
-def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[bool, Optional[str]]:
-    """Check if the user has a linked account and contract for the item"""
+def validate_linked_account(collection: OrderableCollection, workspace: str) -> Tuple[Optional[dict], Optional[str]]:
+    """
+    Validates and retrieves the linked account and contract information for a given collection and workspace.
+
+    This function maps the provided collection to its corresponding provider, retrieves the linked account data for the workspace,
+    and performs necessary validations. For collections associated with the Airbus provider, it further decodes the stored contract
+    information (which is base64-encoded JSON) and verifies whether appropriate contract IDs exist based on the collection type
+    (PNEO, SAR, or legacy contracts such as PHR/Spot). For any failure in these steps, an appropriate error message is returned.
+
+    Args:
+        collection (OrderableCollection): The collection identifier representing the requested orderable dataset.
+        workspace (str): The identifier for the workspace where the linked account data is stored.
+
+    Returns:
+        Tuple[Optional[dict], Optional[str]]:
+            - On successful validation, returns a tuple with the contract identifier (or relevant data) as the first element and None as the second.
+            - If any validation fails (e.g., unrecognized collection, missing linked account, missing API key, or missing contract ID), returns a tuple where 
+              the first element is None and the second element is an error message describing the issue.
+
+    Raises:
+        HTTPException: If an error occurs while retrieving the linked account data from the specified workspace.
+    """
+
+    # Initialize
+    contract_id = None
+
     collection_to_provider = {
         OrderableAirbusCollection.pneo: OrderableCatalogue.airbus.value,
         OrderableAirbusCollection.phr: OrderableCatalogue.airbus.value,
@@ -1111,15 +1149,15 @@ def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[b
     provider = collection_to_provider.get(collection.value)
 
     if not provider:
-        return False, f"Collection {collection.value} not recognised"
+        return None, f"Collection {collection.value} not recognised"
 
     try:
         secret = get_linked_account_data(f"ws-{workspace}", f"otp-{provider}")
     except HTTPException:
-        return False, f"No linked-account is found in workspace {workspace} for provider {provider}"
+        return None, f"No linked-account is found in workspace {workspace} for provider {provider}"
 
     if secret is None or secret.get("otp") is None:
-        return False, f"No API Key is found in workspace {workspace} for provider {provider}"
+        return None, f"No API Key is found in workspace {workspace} for provider {provider}"
 
     # Check the contract data - Airbus only
     if provider == OrderableCatalogue.airbus.value:
@@ -1127,45 +1165,45 @@ def validate_api_key(collection: OrderableCollection, workspace: str) -> Tuple[b
 
         if contracts_b64 is None:
             return (
-                False,
+                None,
                 f"No contract ID is found in workspace {workspace} for provider {provider}",
             )
 
         contracts = json.loads(base64.b64decode(contracts_b64).decode("utf-8"))
         contracts_optical = contracts.get("optical")
         contracts_sar = contracts.get("sar")
-
         if collection.value == OrderableAirbusCollection.sar.value:
             if not contracts_sar:
                 return (
-                    False,
+                    None,
                     f"Collection {collection.value} not available to order for workspace {workspace}.",
                 )
         else:
             if not contracts_optical:
                 return (
-                    False,
+                    None, 
                     f"""Collection {collection.value} not available to order for workspace {workspace}.
                     No Airbus Optical contract ID found""",
                 )
 
             if collection.value == OrderableAirbusCollection.pneo.value:
                 # PNEO Contract
-                contract_found = any("PNEO" in v for v in str(contracts).split())
-                if contract_found:
-                    return True, None
+                contract_id = next((key for key, value in contracts_optical.items() if 'PNEO' in value), None)
+                if contract_id is not None:
+                    return contract_id, None
                 else:
-                    return False, f"Airbus PNEO contract ID not found in workspace {workspace}"
+                    return None, f"Airbus PNEO contract ID not found in workspace {workspace}"
 
             if collection.value in [
                 OrderableAirbusCollection.phr.value,
                 OrderableAirbusCollection.spot.value,
             ]:
                 # LEGACY Contract
-                contract_found = any("LEGACY" in v for v in str(contracts).split())
-                if contract_found:
-                    return True, None
-                else:
-                    return False, f"Airbus LEGACY contract ID not found in workspace {workspace}"
+                contract_id = next((key for key, value in contracts_optical.items() if 'LEGACY' in value), None)
 
-    return True, None
+                if contract_id is not None:
+                    return contract_id, None
+                else:
+                    return None, f"Airbus LEGACY contract ID not found in workspace {workspace}"
+
+    return contract_id, None
