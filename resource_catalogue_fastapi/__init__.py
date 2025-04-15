@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -129,7 +130,7 @@ def ensure_user_logged_in(request: Request):
         logger.info("Logged in as user: %s", username)
 
         if not username:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=401, detail="Unauthorised")
 
 
 class ParentCatalogue(str, Enum):
@@ -180,6 +181,9 @@ class ProductBundle(str, Enum):
     visual = "Visual"
     basic = "Basic"
     analytic = "Analytic"
+
+
+product_bundle_no_aoi = [("SkySatCollect", ProductBundle.analytic)]
 
 
 class ProductBundleRadar(str, Enum):
@@ -302,6 +306,7 @@ class QuoteRequest(BaseModel):
 
     coordinates: list = None
     licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
+    productBundle: Optional[ProductBundle] = None
 
 
 class QuoteResponse(BaseModel):
@@ -309,6 +314,7 @@ class QuoteResponse(BaseModel):
 
     value: float
     units: str
+    message: Optional[str] = None
 
 
 def validate_licence(
@@ -677,6 +683,24 @@ async def order_item(
     radar_options = validate_radar_options(
         collection.value, order_request.radarOptions, product_bundle.value
     )
+    coordinates = order_request.coordinates if order_request.coordinates else None
+
+    tag = ""
+    if product_bundle:
+        logging.info(f"Product bundle found: {product_bundle}")
+        tag += f"-{product_bundle.value}"
+    if radar_options:
+        logging.info(f"Radar options found: {radar_options}")
+        if orbit := radar_options.get("orbit"):
+            tag += "-" + orbit
+        if resolution_variant := radar_options.get("resolutionVariant"):
+            tag += "-" + resolution_variant
+        if projection := radar_options.get("projection"):
+            tag += "-" + projection
+    if coordinates:
+        logging.info(f"Coordinates found: {coordinates}")
+        tag += "-" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
+    tag = f"_{tag[1:]}"  # remove first character (hyphen), replace with underscore
 
     username, workspaces = get_user_details(request)
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
@@ -694,21 +718,55 @@ async def order_item(
             content={"detail": f"You do not have access to order this item. Reason: {err}"},
         )
 
+    location_url = (
+        f"{EODH_DOMAIN}/api/catalogue/stac/catalogs/user/catalogs/{workspace}/catalogs/commercial-data/"
+        f"catalogs/{catalog.value}/collections/{collection.value}/items/{item}{tag}"
+    )
+
     authorization = request.headers.get("Authorization")
 
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/order", 1)[0]
     order_options = {
         "productBundle": product_bundle.value,
-        "coordinates": order_request.coordinates if order_request.coordinates else None,
+        "coordinates": coordinates,
         "endUser": {"country": order_request.endUserCountry, "endUserName": username},
         "licence": licence.airbus_value if licence else None,
     }
     if radar_options:
         order_options["radarOptions"] = radar_options
-    added_keys, stac_item_key, transformed_item_key, item_data = upload_stac_hierarchy_for_order(
-        base_item_url, catalog.value, collection.value, item, workspace, order_options, S3_BUCKET
+
+    status, added_keys, stac_item_key, transformed_item_key, item_data = (
+        upload_stac_hierarchy_for_order(
+            base_item_url,
+            catalog.value,
+            collection.value,
+            item,
+            workspace,
+            order_options,
+            S3_BUCKET,
+            tag,
+            location_url,
+        )
     )
+
+    logging.info(f"Status: {status}")
+
+    if status in [
+        OrderStatus.SUCCEEDED.value,
+        OrderStatus.PENDING.value,
+        OrderStatus.ORDERED.value,
+    ]:
+        message = f"An order already exists for these parameters with status {status}"
+        logging.info(message)
+        return JSONResponse(
+            content=item_data,
+            status_code=200,
+            headers={
+                "Location": location_url,
+                "Message": message,
+            },
+        )
 
     # Check if the item is a multi or stereo PNEO order
     if collection.value == OrderableAirbusCollection.pneo and (
@@ -789,17 +847,13 @@ async def order_item(
     logger.info(f"Sending message to pulsar: {output_data}")
     producer.send((json.dumps(output_data)).encode("utf-8"))
 
-    location_url = (
-        f"{EODH_DOMAIN}/api/catalogue/stac/catalogs/user/catalogs/{workspace}/catalogs/commercial-data/"
-        f"catalogs/{catalog.value}/collections/{collection.value}/items/{item}"
-    )
-
     return JSONResponse(content=item_data, status_code=201, headers={"Location": location_url})
 
 
 @app.post(
     "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item}/quote",
     response_model=QuoteResponse,
+    response_model_exclude_unset=True,
     responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
     dependencies=[Depends(ensure_user_logged_in)],
 )
@@ -818,6 +872,7 @@ def quote(
                         [[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]
                     ],
                     "licence": "Standard",
+                    "productBundle": "General use",
                 }
             ],
         ),
@@ -828,9 +883,11 @@ def quote(
     * coordinates: (optional) Coordinates to limit the AOI of the item for purchase where possible.
       Given in the same nested format as STAC
     * licence: (Airbus-only) The licence type for the order
+    * productBundle: (optional, default=General use") Product bundle requested for order
     """
 
     coordinates = body.coordinates
+    product_bundle = body.productBundle if body.productBundle else "General use"
     licence = validate_licence(collection.value, body.licence)
 
     order_url = str(request.url)
@@ -853,6 +910,8 @@ def quote(
             status_code=403,
             content={"detail": f"You do not have access to quote this item. Reason: {err}"},
         )
+
+    message = None
 
     if catalog.value == OrderableCatalogue.airbus.value:
         if collection.value == OrderableAirbusCollection.sar.value:
@@ -1001,13 +1060,23 @@ def quote(
 
     elif catalog.value == OrderableCatalogue.planet.value:
         try:
+            if (collection.value, product_bundle) in product_bundle_no_aoi:
+                # Not all product bundles allow clipping
+                coordinates = []
+                message = (
+                    "No AOI clipping available for this collection and product bundle combination"
+                )
+
             area = planet_client.get_area_estimate(item, collection.value, coordinates)
 
             if collection.value == "SkySatScene" and area < 3:
                 # SkySatScene has a minimum order size of 3 km2
                 area = 3
 
-            return QuoteResponse(value=area, units="km2")
+            if message:
+                return QuoteResponse(value=area, units="km2", message=message)
+            else:
+                return QuoteResponse(value=area, units="km2")
 
         except Exception as e:
             return JSONResponse(content={"message": str(e)}, status_code=400)
