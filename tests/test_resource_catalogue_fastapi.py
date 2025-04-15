@@ -681,7 +681,7 @@ def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_ai
 
 
 def test_quote_from_planet(requests_mock):
-    expected = {"value": 34, "units": "km2"}
+    expected = {"value": 34, "units": "km2", "message": None}
 
     mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
 

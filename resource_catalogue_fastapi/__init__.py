@@ -178,6 +178,9 @@ class ProductBundle(str, Enum):
     analytic = "Analytic"
 
 
+product_bundle_no_aoi = [("SkySatCollect", ProductBundle.analytic)]
+
+
 class ProductBundleRadar(str, Enum):
     """Product bundles for Airbus SAR data"""
 
@@ -298,6 +301,7 @@ class QuoteRequest(BaseModel):
 
     coordinates: list = None
     licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
+    productBundle: Optional[ProductBundle] = None
 
 
 class QuoteResponse(BaseModel):
@@ -305,6 +309,7 @@ class QuoteResponse(BaseModel):
 
     value: float
     units: str
+    message: Optional[str] = None
 
 
 def validate_licence(
@@ -833,6 +838,7 @@ async def order_item(
 @app.post(
     "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item}/quote",
     response_model=QuoteResponse,
+    response_model_exclude_unset=True,
     responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
     dependencies=[Depends(ensure_user_logged_in)],
 )
@@ -851,6 +857,7 @@ def quote(
                         [[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]
                     ],
                     "licence": "Standard",
+                    "productBundle": "General use",
                 }
             ],
         ),
@@ -861,14 +868,18 @@ def quote(
     * coordinates: (optional) Coordinates to limit the AOI of the item for purchase where possible.
       Given in the same nested format as STAC
     * licence: (Airbus-only) The licence type for the order
+    * productBundle: (optional, default=General use") Product bundle requested for order
     """
 
     coordinates = body.coordinates
+    product_bundle = body.productBundle if body.productBundle else "General use"
     licence = validate_licence(collection.value, body.licence)
 
     order_url = str(request.url)
     base_item_url = order_url.rsplit("/quote", 1)[0]
     item_data = None
+
+    message = None
 
     if catalog.value == OrderableCatalogue.airbus.value:
         if collection.value == OrderableAirbusCollection.sar.value:
@@ -1019,13 +1030,23 @@ def quote(
 
     elif catalog.value == OrderableCatalogue.planet.value:
         try:
+            if (collection.value, product_bundle) in product_bundle_no_aoi:
+                # Not all product bundles allow clipping
+                coordinates = []
+                message = (
+                    "No AOI clipping available for this collection and product bundle combination"
+                )
+
             area = planet_client.get_area_estimate(item, collection.value, coordinates)
 
             if collection.value == "SkySatScene" and area < 3:
                 # SkySatScene has a minimum order size of 3 km2
                 area = 3
 
-            return QuoteResponse(value=area, units="km2")
+            if message:
+                return QuoteResponse(value=area, units="km2", message=message)
+            else:
+                return QuoteResponse(value=area, units="km2")
 
         except Exception as e:
             return JSONResponse(content={"message": str(e)}, status_code=400)
