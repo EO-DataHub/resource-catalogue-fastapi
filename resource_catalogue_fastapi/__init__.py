@@ -894,14 +894,15 @@ def quote(
     base_item_url = order_url.rsplit("/quote", 1)[0]
     item_data = None
 
-    _, workspaces = get_user_details(request)
+    # _, workspaces = get_user_details(request)
 
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
-    workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
+    # workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
+    workspace = "jl-dev"
     if not workspace:
         # This should never occur due to the workspace access dependency
         raise HTTPException(status_code=404)
-    
+
     # Check if the user has a linked account and contract for the item
     contract_id, err = validate_linked_account(collection, workspace)
 
@@ -1179,7 +1180,9 @@ def get_linked_account_data(namespace: str, secret_name: str) -> Dict[str, str]:
     return secret.data
 
 
-def validate_linked_account(collection: OrderableCollection, workspace: str) -> Tuple[Optional[dict], Optional[str]]:
+def validate_linked_account(
+    collection: OrderableCollection, workspace: str
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Validates and retrieves the linked account and contract information for a given collection and workspace.
 
@@ -1195,7 +1198,7 @@ def validate_linked_account(collection: OrderableCollection, workspace: str) -> 
     Returns:
         Tuple[Optional[dict], Optional[str]]:
             - On successful validation, returns a tuple with the contract identifier (or relevant data) as the first element and None as the second.
-            - If any validation fails (e.g., unrecognized collection, missing linked account, missing API key, or missing contract ID), returns a tuple where 
+            - If any validation fails (e.g., unrecognized collection, missing linked account, missing API key, or missing contract ID), returns a tuple where
               the first element is None and the second element is an error message describing the issue.
 
     Raises:
@@ -1249,14 +1252,16 @@ def validate_linked_account(collection: OrderableCollection, workspace: str) -> 
         else:
             if not contracts_optical:
                 return (
-                    None, 
+                    None,
                     f"""Collection {collection.value} not available to order for workspace {workspace}.
                     No Airbus Optical contract ID found""",
                 )
 
             if collection.value == OrderableAirbusCollection.pneo.value:
                 # PNEO Contract
-                contract_id = next((key for key, value in contracts_optical.items() if 'PNEO' in value), None)
+                contract_id = next(
+                    (key for key, value in contracts_optical.items() if "PNEO" in value), None
+                )
                 if contract_id is not None:
                     return contract_id, None
                 else:
@@ -1267,7 +1272,9 @@ def validate_linked_account(collection: OrderableCollection, workspace: str) -> 
                 OrderableAirbusCollection.spot.value,
             ]:
                 # LEGACY Contract
-                contract_id = next((key for key, value in contracts_optical.items() if 'LEGACY' in value), None)
+                contract_id = next(
+                    (key for key, value in contracts_optical.items() if "LEGACY" in value), None
+                )
 
                 if contract_id is not None:
                     return contract_id, None

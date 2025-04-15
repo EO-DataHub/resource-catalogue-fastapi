@@ -631,19 +631,38 @@ def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
 
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_linked_account_data")
+@patch("resource_catalogue_fastapi.validate_linked_account")
+def test_quote__airbus_sar(
+    mock_validate_linked_account,
+    mock_get_linked_account_data,
+    mock_get_user_details,
+    mock_generate_airbus_access_token,
+    mock_get_quote_from_airbus,
+):
     result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = [
         {"acquisitionId": "otherId", "price": 200},
         {"acquisitionId": "12345", "price": {"currency": "EUR", "total": 100}},
     ]
     mock_generate_airbus_access_token.return_value = "valid_token"
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64,
+    }
+
+    mock_validate_linked_account.return_value = ("test_contract_id", None)
+
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/12345/quote",
         headers=headers,
         json={"licence": "Single User Licence"},
     )
+
     assert response.status_code == 200
     assert response.json() == result
 
@@ -651,12 +670,28 @@ def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_fro
 @patch("resource_catalogue_fastapi.requests.get")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_linked_account_data")
+@patch("resource_catalogue_fastapi.validate_linked_account")
 def test_quote__airbus_optical(
-    mock_generate_airbus_access_token, mock_get_quote_from_airbus, mock_get_request
+    mock_validate_linked_account,
+    mock_get_linked_account_data,
+    mock_get_user_details,
+    mock_generate_airbus_access_token,
+    mock_get_quote_from_airbus,
+    mock_get_request,
 ):
     result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
     mock_generate_airbus_access_token.return_value = "valid_token"
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64,
+    }
+
+    mock_validate_linked_account.return_value = ("test_contract_id", None)
+
     mock_response = MagicMock()
     mock_response.json.return_value = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
     mock_response.raise_for_status = MagicMock()
@@ -673,11 +708,28 @@ def test_quote__airbus_optical(
 
 
 @patch("resource_catalogue_fastapi.requests.get")
-def test_quote__airbus_optical_multi_order(mock_get_request):
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_linked_account_data")
+@patch("resource_catalogue_fastapi.validate_linked_account")
+def test_quote__airbus_optical_multi_order(
+    mock_validate_linked_account,
+    mock_get_linked_account_data,
+    mock_get_user_details,
+    mock_get_request,
+):
     mock_response = MagicMock()
     mock_response.json.return_value = {
         "properties": {"composed_of_acquisition_identifiers": [12345, 67890]}
     }
+
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64,
+    }
+
+    mock_validate_linked_account.return_value = ("test_contract_id", None)
+
     mock_response.raise_for_status = MagicMock()
     mock_get_request.return_value = mock_response
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
@@ -692,7 +744,25 @@ def test_quote__airbus_optical_multi_order(mock_get_request):
 
 
 @patch("resource_catalogue_fastapi.planet_client.PlanetClient.get_area_estimate")
-def test_quote__planet(mock_get_quote_from_planet):
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_linked_account_data")
+@patch("resource_catalogue_fastapi.validate_linked_account")
+def test_quote__planet(
+    mock_validate_linked_account,
+    mock_get_linked_account_data,
+    mock_get_user_details,
+    mock_get_quote_from_planet,
+):
+
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64,
+    }
+
+    mock_validate_linked_account.return_value = ("test_contract_id", None)
+
     mock_get_quote_from_planet.return_value = 34
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
@@ -706,8 +776,24 @@ def test_quote__planet(mock_get_quote_from_planet):
 
 
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote_invalid_token(mock_generate_access_token):
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_linked_account_data")
+@patch("resource_catalogue_fastapi.validate_linked_account")
+def test_quote_invalid_token(
+    mock_validate_linked_account,
+    mock_get_linked_account_data,
+    mock_get_user_details,
+    mock_generate_access_token,
+):
     mock_generate_access_token.return_value = None
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64,
+    }
+
+    mock_validate_linked_account.return_value = ("test_contract_id", None)
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/12345/quote",
@@ -719,9 +805,26 @@ def test_quote_invalid_token(mock_generate_access_token):
 
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_airbus):
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_linked_account_data")
+@patch("resource_catalogue_fastapi.validate_linked_account")
+def test_quote_id_not_matched(
+    mock_validate_linked_account,
+    mock_get_linked_account_data,
+    mock_get_user_details,
+    mock_generate_access_token,
+    mock_get_quote_from_airbus,
+):
     mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}]
     mock_generate_access_token.return_value = "valid_token"
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64,
+    }
+
+    mock_validate_linked_account.return_value = ("test_contract_id", None)
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/12345/quote",
@@ -731,8 +834,22 @@ def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_ai
     assert response.status_code == 404
 
 
-def test_quote_from_planet(requests_mock):
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_linked_account_data")
+@patch("resource_catalogue_fastapi.validate_linked_account")
+def test_quote_from_planet(
+    mock_validate_linked_account, mock_get_linked_account_data, mock_get_user_details, requests_mock
+):
     expected = {"value": 34, "units": "km2", "message": None}
+
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_linked_account_data.return_value = {
+        "otp": "fake-api-key",
+        "contracts": fake_contracts_b64,
+    }
+
+    mock_validate_linked_account.return_value = ("test_contract_id", None)
 
     mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
 
