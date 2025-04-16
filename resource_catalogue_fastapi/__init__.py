@@ -1,4 +1,3 @@
-import base64
 import hashlib
 import json
 import logging
@@ -11,7 +10,6 @@ import requests
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from kubernetes import client, config
 from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
 
@@ -31,6 +29,7 @@ from .utils import (
     update_stac_order_status,
     upload_file_s3,
     upload_stac_hierarchy_for_order,
+    get_api_key,
 )
 
 logging.basicConfig(
@@ -710,14 +709,22 @@ async def order_item(
         # This should never occur due to the workspace access dependency
         raise HTTPException(status_code=404)
 
-    # Check if the user has a linked account and contract for the item
-    _, err = validate_linked_account(collection, workspace)
-
-    if err is not None:
+    # validate an api key exists before ordering
+    api_key = get_api_key(catalog.value, workspace)
+    if api_key is None:
         return JSONResponse(
             status_code=403,
-            content={"detail": f"You do not have access to order this item. Reason: {err}"},
+            content={"detail": "You do not have access to order this item"},
         )
+
+    # if airbus, validate the user has the correct contract_id too before ordering
+    if catalog.value == OrderableCatalogue.airbus.value:
+        _, err = airbus_client.get_contract_id(workspace, collection.value)
+        if err is not None:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": f"You do not have access to order this item. Reason: {err}"},
+            )
 
     location_url = (
         f"{EODH_DOMAIN}/api/catalogue/stac/catalogs/user/catalogs/{workspace}/catalogs/commercial-data/"
@@ -895,27 +902,28 @@ def quote(
     base_item_url = order_url.rsplit("/quote", 1)[0]
     item_data = None
 
-    # _, workspaces = get_user_details(request)
+    _, workspaces = get_user_details(request)
 
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
-    # workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
-    workspace = "jl-dev"
+    workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
+
     if not workspace:
         # This should never occur due to the workspace access dependency
         raise HTTPException(status_code=404)
 
-    # Check if the user has a linked account and contract for the item
-    contract_id, err = validate_linked_account(collection, workspace)
-
-    if err is not None:
-        return JSONResponse(
-            status_code=403,
-            content={"detail": f"You do not have access to quote this item. Reason: {err}"},
-        )
-
     message = None
 
+    # validate the workspace has the correct api key before quoting
+    api_key = get_api_key(catalog.value, workspace)
+
+    if api_key is None:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "You do not have access to quote this item"},
+        )
+
     if catalog.value == OrderableCatalogue.airbus.value:
+
         if collection.value == OrderableAirbusCollection.sar.value:
             if AIRBUS_ENV == "prod":
                 url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
@@ -923,6 +931,16 @@ def quote(
                 url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
             request_body = {"acquisitions": [item], "orderTemplate": licence.airbus_value}
         elif collection.value in {e.value for e in OrderableAirbusCollection}:
+
+            # Get the contract ID
+            contract_id, err = airbus_client.get_contract_id(workspace, collection.value)
+
+            if err is not None:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": f"You do not have access to quote this item. Reason: {err}"},
+                )
+
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             spectral_processing = "bundle"
             if collection.value == OrderableAirbusCollection.pneo.value:
@@ -1024,7 +1042,7 @@ def quote(
                     "detail": f"Collection {collection.value} not recognised as an Airbus collection"
                 },
             )
-        access_token = airbus_client.generate_access_token()
+        access_token = airbus_client.generate_access_token(workspace)
         if not access_token:
             return JSONResponse(
                 status_code=500, content={"detail": "Failed to generate access token"}
@@ -1166,125 +1184,3 @@ async def get_airbus_collection_thumbnail(collection: str):
     if not os.path.exists(thumbnail_path):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return FileResponse(thumbnail_path)
-
-
-def get_linked_account_data(namespace: str, secret_name: str) -> Dict[str, str]:
-    """Get the secret keys from a Kubernetes secret"""
-    try:
-        config.load_incluster_config()
-        v1 = client.CoreV1Api()
-        secret = v1.read_namespaced_secret(secret_name, namespace)
-    except client.exceptions.ApiException as e:
-        logger.error(f"Error fetching secret: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching secret") from e
-    return secret.data
-
-
-def validate_linked_account(
-    collection: OrderableCollection, workspace: str
-) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Validates and retrieves the linked account and contract information for a given collection and workspace.
-
-    This function maps the provided collection to its corresponding provider, retrieves the
-    linked account data for the workspace, and performs necessary validations.
-    For collections associated with the Airbus provider, it further decodes the stored contract
-    information (which is base64-encoded JSON) and verifies whether appropriate contract IDs
-    exist based on the collection type (PNEO, SAR, or legacy contracts such as PHR/Spot).
-    For any failure in these steps, an appropriate error message is returned.
-
-    Args:
-        collection (OrderableCollection): The collection identifier representing the requested
-        orderable dataset.
-        workspace (str): The identifier for the workspace where the linked account data is stored.
-
-    Returns:
-        Tuple[Optional[dict], Optional[str]]:
-            - On successful validation, returns a tuple with the contract identifier (or relevant data)
-              as the first element and None as the second.
-            - If any validation fails (e.g., unrecognized collection, missing linked account,
-              missing API key, or missing contract ID), returns a tuple where
-              the first element is None and the second element is an error message describing the issue.
-
-    Raises:
-        HTTPException: If an error occurs while retrieving the linked account data from the
-        specified workspace.
-    """
-
-    # Initialize
-    contract_id = None
-
-    collection_to_provider = {
-        OrderableAirbusCollection.pneo: OrderableCatalogue.airbus.value,
-        OrderableAirbusCollection.phr: OrderableCatalogue.airbus.value,
-        OrderableAirbusCollection.spot: OrderableCatalogue.airbus.value,
-        OrderableAirbusCollection.sar: OrderableCatalogue.airbus.value,
-        "PSScene": OrderableCatalogue.planet.value,
-        "SkySatCollect": OrderableCatalogue.planet.value,
-    }
-
-    provider = collection_to_provider.get(collection.value)
-
-    if not provider:
-        return None, f"Collection {collection.value} not recognised"
-
-    try:
-        secret = get_linked_account_data(f"ws-{workspace}", f"otp-{provider}")
-    except HTTPException:
-        return None, f"No linked-account is found in workspace {workspace} for provider {provider}"
-
-    if secret is None or secret.get("otp") is None:
-        return None, f"No API Key is found in workspace {workspace} for provider {provider}"
-
-    # Check the contract data - Airbus only
-    if provider == OrderableCatalogue.airbus.value:
-        contracts_b64 = secret.get("contracts")
-
-        if contracts_b64 is None:
-            return (
-                None,
-                f"No contract ID is found in workspace {workspace} for provider {provider}",
-            )
-
-        contracts = json.loads(base64.b64decode(contracts_b64).decode("utf-8"))
-        contracts_optical = contracts.get("optical")
-        contracts_sar = contracts.get("sar")
-        if collection.value == OrderableAirbusCollection.sar.value:
-            if not contracts_sar:
-                return (
-                    None,
-                    f"Collection {collection.value} not available to order for workspace {workspace}.",
-                )
-        else:
-            if not contracts_optical:
-                return (
-                    None,
-                    f"""Collection {collection.value} not available to order for workspace {workspace}.
-                    No Airbus Optical contract ID found""",
-                )
-
-            if collection.value == OrderableAirbusCollection.pneo.value:
-                # PNEO Contract
-                contract_id = next(
-                    (key for key, value in contracts_optical.items() if "PNEO" in value), None
-                )
-                if contract_id is not None:
-                    return contract_id, None
-                else:
-                    return None, f"Airbus PNEO contract ID not found in workspace {workspace}"
-
-            if collection.value in [
-                OrderableAirbusCollection.phr.value,
-                OrderableAirbusCollection.spot.value,
-            ]:
-                # LEGACY Contract
-                contract_id = next(
-                    (key for key, value in contracts_optical.items() if "LEGACY" in value), None
-                )
-
-                if contract_id is not None:
-                    return contract_id, None
-                else:
-                    return None, f"Airbus LEGACY contract ID not found in workspace {workspace}"
-
-    return contract_id, None
