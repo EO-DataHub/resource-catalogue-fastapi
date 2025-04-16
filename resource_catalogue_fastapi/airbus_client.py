@@ -2,11 +2,12 @@ import base64
 import json
 import logging
 import os
+from typing import Optional, Tuple
 
 import requests
 from fastapi import HTTPException
-from typing import Optional, Tuple
 from kubernetes import client, config
+
 from .utils import get_api_key
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger

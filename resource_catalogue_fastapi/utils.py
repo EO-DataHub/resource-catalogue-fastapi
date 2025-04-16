@@ -1,6 +1,6 @@
+import base64
 import json
 import logging
-import base64
 import os
 import time
 import urllib.request
@@ -14,9 +14,9 @@ from urllib.request import urlopen
 import boto3
 import jwt
 import requests
-from kubernetes import client, config
 from botocore.exceptions import ClientError
 from fastapi import Depends, HTTPException, Request
+from kubernetes import client, config
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
@@ -405,11 +405,13 @@ def get_api_key(provider: str, workspace: str) -> str:
     4. Use the OTP key to decrypt the ciphertext and return the plaintext API key.
     """
 
+    CLUSTER_PREFIX = os.getenv("CLUSTER_PREFIX", "")
+
     # Initialize Kubernetes API client
     config.load_incluster_config()
     v1 = client.CoreV1Api()
     namespace = f"ws-{workspace}"
-    secretId = f"{namespace}"
+    secretId = f"{namespace}-{CLUSTER_PREFIX}"
 
     # Retrieve the OTP key from Kubernetes Secrets
     logging.info("Fetching OTP key from Kubernetes...")

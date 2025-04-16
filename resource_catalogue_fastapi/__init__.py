@@ -21,6 +21,7 @@ from .utils import (
     check_user_can_access_requested_workspace,
     delete_file_s3,
     execute_order_workflow,
+    get_api_key,
     get_file_from_url,
     get_nested_files_from_url,
     get_path_params,
@@ -29,7 +30,6 @@ from .utils import (
     update_stac_order_status,
     upload_file_s3,
     upload_stac_hierarchy_for_order,
-    get_api_key,
 )
 
 logging.basicConfig(
