@@ -58,9 +58,11 @@ def mock_requests_post():
         yield mock_post
 
 
-def test_get_secret_airbus_api_key(airbus_client, mock_k8s_client, mock_k8s_core_v1_api):
-    api_key = airbus_client.get_secret_airbus_api_key("test_user")
-    assert api_key == "test_api_key"
+@pytest.fixture
+def mock_get_api_key():
+    with mock.patch("resource_catalogue_fastapi.airbus_client.get_api_key") as mock_key:
+        mock_key.return_value = "mocked_api_key"
+        yield mock_key
 
 
 def test_generate_access_token(
@@ -70,6 +72,7 @@ def test_generate_access_token(
     mock_k8s_client,
     mock_k8s_core_v1_api,
     mock_requests_post,
+    mock_get_api_key,
 ):
     token = airbus_client.generate_access_token("test_user")
     assert token == "test_access_token"

@@ -21,6 +21,7 @@ from .utils import (
     check_user_can_access_requested_workspace,
     delete_file_s3,
     execute_order_workflow,
+    get_api_key,
     get_file_from_url,
     get_nested_files_from_url,
     get_path_params,
@@ -39,6 +40,9 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
+
+# Cluster prefix to pass into the data adaptor
+CLUSTER_PREFIX = os.getenv("CLUSTER_PREFIX", None)
 
 # Domain for workspaces, used for OPA policy check
 WORKSPACES_DOMAIN = os.getenv("WORKSPACES_DOMAIN", "workspaces.dev.eodhp.eco-ke-staging.com")
@@ -101,7 +105,8 @@ def get_producer():
 
 
 async def workspace_access_dependency(
-    request: Request, path_params: dict = Depends(get_path_params)  # noqa: B008
+    request: Request,
+    path_params: dict = Depends(get_path_params),  # noqa: B008
 ):
     """Dependency to check if a user has access to a specified workspace"""
     if ENABLE_OPA_POLICY_CHECK:
@@ -704,6 +709,23 @@ async def order_item(
         # This should never occur due to the workspace access dependency
         raise HTTPException(status_code=404)
 
+    # validate an api key exists before ordering
+    api_key = get_api_key(catalog.value, workspace)
+    if api_key is None:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "You do not have access to order this item"},
+        )
+
+    # if airbus, validate the user has the correct contract_id too before ordering
+    if catalog.value == OrderableCatalogue.airbus.value:
+        _, err = airbus_client.get_contract_id(workspace, collection.value)
+        if err is not None:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": f"You do not have access to order this item. Reason: {err}"},
+            )
+
     location_url = (
         f"{EODH_DOMAIN}/api/catalogue/stac/catalogs/user/catalogs/{workspace}/catalogs/commercial-data/"
         f"catalogs/{catalog.value}/collections/{collection.value}/items/{item}{tag}"
@@ -818,6 +840,7 @@ async def order_item(
             order_request.coordinates,
             end_users,
             licence.airbus_value if licence else None,
+            CLUSTER_PREFIX,
         )
         logger.info(f"Response from ADES: {ades_response}")
     except Exception as e:
@@ -879,9 +902,28 @@ def quote(
     base_item_url = order_url.rsplit("/quote", 1)[0]
     item_data = None
 
+    _, workspaces = get_user_details(request)
+
+    # workspaces from user details was originally a list, now usually expect string containing one workspace.
+    workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
+
+    if not workspace:
+        # This should never occur due to the workspace access dependency
+        raise HTTPException(status_code=404)
+
     message = None
 
+    # validate the workspace has the correct api key before quoting
+    api_key = get_api_key(catalog.value, workspace)
+
+    if api_key is None:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "You do not have access to quote this item"},
+        )
+
     if catalog.value == OrderableCatalogue.airbus.value:
+
         if collection.value == OrderableAirbusCollection.sar.value:
             if AIRBUS_ENV == "prod":
                 url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
@@ -889,6 +931,16 @@ def quote(
                 url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
             request_body = {"acquisitions": [item], "orderTemplate": licence.airbus_value}
         elif collection.value in {e.value for e in OrderableAirbusCollection}:
+
+            # Get the contract ID
+            contract_id, err = airbus_client.get_contract_id(workspace, collection.value)
+
+            if err is not None:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": f"You do not have access to quote this item. Reason: {err}"},
+                )
+
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             spectral_processing = "bundle"
             if collection.value == OrderableAirbusCollection.pneo.value:
@@ -898,7 +950,6 @@ def quote(
                 item_data = item_response.json()
 
                 product_type = "PleiadesNeoArchiveMono"
-                contract_id = "CTR24005241"
                 datastrip_id = None
                 item_uuids = [item_data.get("properties", {}).get("id")]
                 if multi_ids := item_data.get("properties", {}).get(  # noqa: F841
@@ -920,12 +971,10 @@ def quote(
                         item_uuids.append(multi_data.get("properties", {}).get("id"))
             elif collection.value == OrderableAirbusCollection.phr.value:
                 product_type = "PleiadesArchiveMono"
-                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
                 datastrip_id = item
             elif collection.value == OrderableAirbusCollection.spot.value:
                 product_type = "SPOTArchive1.5Mono"
-                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
                 item_uuids = None
                 datastrip_id = item
             if not coordinates:
@@ -993,7 +1042,7 @@ def quote(
                     "detail": f"Collection {collection.value} not recognised as an Airbus collection"
                 },
             )
-        access_token = airbus_client.generate_access_token()
+        access_token = airbus_client.generate_access_token(workspace)
         if not access_token:
             return JSONResponse(
                 status_code=500, content={"detail": "Failed to generate access token"}

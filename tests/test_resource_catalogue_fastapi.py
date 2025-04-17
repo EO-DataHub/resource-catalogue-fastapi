@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 from unittest.mock import MagicMock, patch
@@ -15,6 +16,13 @@ from resource_catalogue_fastapi import (
 )
 
 client = TestClient(app)
+
+# Fake Successful Contracts
+fake_contracts = {
+    "sar": True,
+    "optical": {"C12345": "My LEGACY Contract", "C67890": "My PNEO Contract"},
+}
+fake_contracts_b64 = base64.b64encode(json.dumps(fake_contracts).encode()).decode()
 
 
 @pytest.fixture(autouse=True)
@@ -105,17 +113,27 @@ def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
 @patch("resource_catalogue_fastapi.get_file_from_url")
 @patch("resource_catalogue_fastapi.utils.requests.post")
 @patch("resource_catalogue_fastapi.utils.requests.get")
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_contract_id")
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
 def test_order_item_success_airbus_sar(
     mock_create_producer,
     mock_get_user_details,
+    mock_load_incluster_config,
+    mock_get_api_key,
+    mock_get_contract_id,
     mock_get_request,
     mock_post_request,
     mock_get_file_from_url,
     mock_upload_file_s3,
 ):
+
     # Mock the dependencies
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
+    mock_get_contract_id.return_value = ("my-contract-id", None)
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
     mock_producer = MagicMock()
     mock_create_producer.return_value = mock_producer
@@ -168,6 +186,9 @@ def test_order_item_success_airbus_sar(
     mock_post_request.assert_called_once()
 
 
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_contract_id")
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
 @patch("resource_catalogue_fastapi.utils.requests.post")
@@ -181,6 +202,9 @@ def test_order_item_success_airbus_phr(
     mock_post_request,
     mock_get_file_from_url,
     mock_upload_file_s3,
+    mock_load_incluster_config,
+    mock_get_api_key,
+    mock_get_contract_id,
 ):
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
@@ -197,6 +221,10 @@ def test_order_item_success_airbus_phr(
     mock_post_request.return_value = mock_response
     mock_get_request.return_value = mock_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
+    mock_get_contract_id.return_value = ("test-contract-id", None)
 
     # Define the request payload
     payload = {
@@ -233,6 +261,9 @@ def test_order_item_success_airbus_phr(
     mock_post_request.assert_called_once()
 
 
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_contract_id")
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.validate_country_code")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
@@ -248,6 +279,9 @@ def test_order_item_success_airbus_pneo(
     mock_get_file_from_url,
     mock_upload_file_s3,
     mock_validate_country_code,
+    mock_load_incluster_config,
+    mock_get_api_key,
+    mock_get_contract_id,
 ):
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
@@ -265,6 +299,10 @@ def test_order_item_success_airbus_pneo(
     mock_get_request.return_value = mock_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
     mock_validate_country_code.return_value = None
+
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
+    mock_get_contract_id.return_value = ("test-contract-id", None)
 
     # Define the request payload
     payload = {
@@ -303,6 +341,9 @@ def test_order_item_success_airbus_pneo(
     mock_post_request.assert_called_once()
 
 
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_contract_id")
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
 @patch("resource_catalogue_fastapi.utils.requests.post")
@@ -316,6 +357,9 @@ def test_order_item_success_airbus_spot(
     mock_post_request,
     mock_get_file_from_url,
     mock_upload_file_s3,
+    mock_load_incluster_config,
+    mock_get_api_key,
+    mock_get_contract_id,
 ):
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
@@ -332,6 +376,10 @@ def test_order_item_success_airbus_spot(
     mock_post_request.return_value = mock_response
     mock_get_request.return_value = mock_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
+    mock_get_contract_id.return_value = ("test-contract-id", None)
 
     # Define the request payload
     payload = {
@@ -369,6 +417,8 @@ def test_order_item_success_airbus_spot(
     mock_post_request.assert_called_once()
 
 
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
 @patch("resource_catalogue_fastapi.utils.requests.post")
@@ -382,6 +432,8 @@ def test_order_item_success_planet(
     mock_post_request,
     mock_get_file_from_url,
     mock_upload_file_s3,
+    mock_load_incluster_config,
+    mock_get_api_key,
 ):
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
@@ -398,6 +450,9 @@ def test_order_item_success_planet(
     mock_post_request.return_value = mock_response
     mock_get_request.return_value = mock_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
 
     # Define the request payload
     payload = {
@@ -459,6 +514,9 @@ def test_order_item_invalid(
     assert response.status_code == 422
 
 
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_contract_id")
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 @patch("resource_catalogue_fastapi.upload_file_s3")
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
 @patch("resource_catalogue_fastapi.utils.requests.post")
@@ -472,6 +530,9 @@ def test_order_item_failure(
     mock_post_request,
     mock_utils_upload_file_s3,
     mock_upload_file_s3,
+    mock_load_incluster_config,
+    mock_get_api_key,
+    mock_get_contract_id,
 ):
     # Mock the dependencies
     mock_producer = MagicMock()
@@ -489,6 +550,10 @@ def test_order_item_failure(
     mock_get_response.raise_for_status = MagicMock()
     mock_get_request.return_value = mock_get_response
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
+    mock_get_contract_id.return_value = ("test-contract-id", None)
 
     # Define the request payload
     payload = {
@@ -578,21 +643,39 @@ def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
     )
 
 
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_contract_id")
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
+@patch("resource_catalogue_fastapi.get_user_details")
+def test_quote__airbus_sar(
+    mock_get_user_details,
+    mock_generate_airbus_access_token,
+    mock_get_quote_from_airbus,
+    mock_load_incluster_config,
+    mock_get_api_key,
+    mock_get_contract_id,
+):
     result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = [
         {"acquisitionId": "otherId", "price": 200},
         {"acquisitionId": "12345", "price": {"currency": "EUR", "total": 100}},
     ]
     mock_generate_airbus_access_token.return_value = "valid_token"
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
+    mock_get_contract_id.return_value = ("test-contract-id", None)
+
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/12345/quote",
         headers=headers,
         json={"licence": "Single User Licence"},
     )
+
     assert response.status_code == 200
     assert response.json() == result
 
@@ -600,12 +683,30 @@ def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_fro
 @patch("resource_catalogue_fastapi.requests.get")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_contract_id")
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 def test_quote__airbus_optical(
-    mock_generate_airbus_access_token, mock_get_quote_from_airbus, mock_get_request
+    mock_load_incluster_config,
+    mock_get_api_key,
+    mock_get_user_details,
+    mock_get_contract_id,
+    mock_generate_airbus_access_token,
+    mock_get_quote_from_airbus,
+    mock_get_request,
 ):
     result = {"units": "EUR", "value": 100}
+
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
+    mock_get_contract_id.return_value = ("my-contract-id", None)
+
     mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
     mock_generate_airbus_access_token.return_value = "valid_token"
+
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
     mock_response = MagicMock()
     mock_response.json.return_value = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
     mock_response.raise_for_status = MagicMock()
@@ -621,12 +722,29 @@ def test_quote__airbus_optical(
     assert len(mock_get_quote_from_airbus.call_args[0][1]["items"][0]["datastripIds"]) == 1
 
 
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_contract_id")
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 @patch("resource_catalogue_fastapi.requests.get")
-def test_quote__airbus_optical_multi_order(mock_get_request):
+@patch("resource_catalogue_fastapi.get_user_details")
+def test_quote__airbus_optical_multi_order(
+    mock_get_user_details,
+    mock_get_request,
+    mock_load_incluster_config,
+    mock_get_api_key,
+    mock_get_contract_id,
+):
     mock_response = MagicMock()
     mock_response.json.return_value = {
         "properties": {"composed_of_acquisition_identifiers": [12345, 67890]}
     }
+
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
+    mock_get_contract_id.return_value = ("test-contract-id", None)
+
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
     mock_response.raise_for_status = MagicMock()
     mock_get_request.return_value = mock_response
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
@@ -641,7 +759,17 @@ def test_quote__airbus_optical_multi_order(mock_get_request):
 
 
 @patch("resource_catalogue_fastapi.planet_client.PlanetClient.get_area_estimate")
-def test_quote__planet(mock_get_quote_from_planet):
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_api_key")
+def test_quote__planet(
+    mock_get_api_key,
+    mock_get_user_details,
+    mock_get_quote_from_planet,
+):
+
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_api_key.return_value = "test-api-key"
     mock_get_quote_from_planet.return_value = 34
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
@@ -655,8 +783,18 @@ def test_quote__planet(mock_get_quote_from_planet):
 
 
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote_invalid_token(mock_generate_access_token):
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_api_key")
+def test_quote_invalid_token(
+    mock_get_api_key,
+    mock_get_user_details,
+    mock_generate_access_token,
+):
     mock_generate_access_token.return_value = None
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_api_key.return_value = "test-api-key"
+
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/12345/quote",
@@ -666,11 +804,28 @@ def test_quote_invalid_token(mock_generate_access_token):
     assert response.status_code == 500
 
 
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_contract_id")
+@patch("resource_catalogue_fastapi.get_api_key")
+@patch("kubernetes.config.load_incluster_config")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_airbus):
+@patch("resource_catalogue_fastapi.get_user_details")
+def test_quote_id_not_matched(
+    mock_get_user_details,
+    mock_generate_access_token,
+    mock_get_quote_from_airbus,
+    mock_load_incluster_config,
+    mock_get_api_key,
+    mock_get_contract_id,
+):
     mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}]
     mock_generate_access_token.return_value = "valid_token"
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_load_incluster_config.return_value = None
+    mock_get_api_key.return_value = "test-api-key"
+    mock_get_contract_id.return_value = ("test-contract-id", None)
+
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/items/12345/quote",
@@ -680,8 +835,14 @@ def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_ai
     assert response.status_code == 404
 
 
-def test_quote_from_planet(requests_mock):
+@patch("resource_catalogue_fastapi.get_user_details")
+@patch("resource_catalogue_fastapi.get_api_key")
+def test_quote_from_planet(mock_get_api_key, mock_get_user_details, requests_mock):
     expected = {"value": 34, "units": "km2", "message": None}
+
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
+    mock_get_api_key.return_value = "test-api-key"
 
     mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
 
