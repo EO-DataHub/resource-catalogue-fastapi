@@ -700,7 +700,9 @@ async def order_item(
     if coordinates:
         logging.info(f"Coordinates found: {coordinates}")
         tag += "-" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
-    tag = f"_{tag[1:]}"  # remove first character (hyphen), replace with underscore
+    tag = (
+        f"_{tag[1:].replace(' ', '-')}"  # remove first character (hyphen), replace with underscore
+    )
 
     username, workspaces = get_user_details(request)
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
