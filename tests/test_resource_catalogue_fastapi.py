@@ -792,6 +792,9 @@ def test_quote_invalid_token(
     mock_get_user_details,
     mock_generate_access_token,
 ):
+    import warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    
     mock_generate_access_token.return_value = None
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
     mock_load_incluster_config.return_value = None
