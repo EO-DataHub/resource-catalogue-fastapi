@@ -926,7 +926,7 @@ def quote(
 
     if catalog.value == OrderableCatalogue.airbus.value:
 
-        # Get the contract ID. If contract_id is None, it is a SAR collection. 
+        # Get the contract ID. If contract_id is None, it is a SAR collection.
         # If err is not None, the user does not have access to the collection
         contract_id, err = airbus_client.get_contract_id(workspace, collection.value)
 
