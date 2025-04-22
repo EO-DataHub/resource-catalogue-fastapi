@@ -782,22 +782,24 @@ def test_quote__planet(
     mock_get_quote_from_planet.assert_called_once_with("12345", "PSScene", None)
 
 
-@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
-@patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.get_api_key")
 @patch("kubernetes.config.load_incluster_config")
+@patch("kubernetes.client.CoreV1Api.read_namespaced_secret")
+@patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
+@patch("resource_catalogue_fastapi.get_user_details")
 def test_quote_invalid_token(
-    mock_load_incluster_config,
-    mock_get_api_key,
     mock_get_user_details,
     mock_generate_access_token,
+    mock_read_secret,
+    mock_load_incluster_config,
+    mock_get_api_key,
 ):
-    import warnings
-    warnings.filterwarnings("ignore", category=DeprecationWarning)
-    
-    mock_generate_access_token.return_value = None
-    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
     mock_load_incluster_config.return_value = None
+    mock_generate_access_token.return_value = None
+    mock_read_secret.return_value = MagicMock(data={"dummy": "ZGF0YQ=="})  # base64 encoded 'data'
+
+    mock_get_user_details.return_value = ("test_user", ["test_workspace"])
+
     mock_get_api_key.return_value = "test-api-key"
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
