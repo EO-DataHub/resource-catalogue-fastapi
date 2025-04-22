@@ -408,8 +408,8 @@ def get_api_key(provider: str, workspace: str) -> str:
     CLUSTER_PREFIX = os.getenv("CLUSTER_PREFIX", "")
 
     # Initialize Kubernetes API client
-    # config.load_incluster_config()
-    config.load_kube_config()
+    config.load_incluster_config()
+
     v1 = client.CoreV1Api()
     namespace = f"ws-{workspace}"
     secretId = f"{namespace}-{CLUSTER_PREFIX}"
