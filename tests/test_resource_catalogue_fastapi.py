@@ -796,7 +796,16 @@ def test_quote_invalid_token(
 ):
     mock_load_incluster_config.return_value = None
     mock_generate_access_token.return_value = None
-    mock_read_secret.return_value = MagicMock(data={"dummy": "ZGF0YQ=="})  # base64 encoded 'data'
+
+    mock_contracts = {
+        "contracts": base64.b64encode(
+            json.dumps({"sar": True, "optical": {}}).encode("utf-8")
+        ).decode("utf-8")
+    }
+
+    mock_read_secret.return_value = MagicMock(data=mock_contracts)
+
+    # mock_read_secret.return_value = MagicMock(data={"sar": "ZGF0YQ=="})  # base64 encoded 'data'
 
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
 
