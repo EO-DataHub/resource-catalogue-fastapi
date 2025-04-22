@@ -7,9 +7,13 @@ import pytest
 import requests
 from fastapi.testclient import TestClient
 
-from resource_catalogue_fastapi import (OrderableCatalogue,
-                                        OrderablePlanetCollection,
-                                        QuoteRequest, app, quote)
+from resource_catalogue_fastapi import (
+    OrderableCatalogue,
+    OrderablePlanetCollection,
+    QuoteRequest,
+    app,
+    quote,
+)
 
 client = TestClient(app)
 

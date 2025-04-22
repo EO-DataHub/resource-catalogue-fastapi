@@ -15,13 +15,22 @@ from pydantic import BaseModel, Field
 
 from .airbus_client import AirbusClient
 from .planet_client import PlanetClient
-from .utils import (OrderStatus, check_user_can_access_a_workspace,
-                    check_user_can_access_requested_workspace, delete_file_s3,
-                    execute_order_workflow, get_api_key, get_file_from_url,
-                    get_nested_files_from_url, get_path_params,
-                    get_user_details, rate_limiter_dependency,
-                    update_stac_order_status, upload_file_s3,
-                    upload_stac_hierarchy_for_order)
+from .utils import (
+    OrderStatus,
+    check_user_can_access_a_workspace,
+    check_user_can_access_requested_workspace,
+    delete_file_s3,
+    execute_order_workflow,
+    get_api_key,
+    get_file_from_url,
+    get_nested_files_from_url,
+    get_path_params,
+    get_user_details,
+    rate_limiter_dependency,
+    update_stac_order_status,
+    upload_file_s3,
+    upload_stac_hierarchy_for_order,
+)
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
