@@ -57,8 +57,9 @@ OPA_SERVICE_ENDPOINT = os.getenv(
 # Used for local testing where OPA is not available
 ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "false"))
 
-# S3 bucket to store user data
+# S3 buckets to store user data and receive commercial data
 S3_BUCKET = os.getenv("S3_BUCKET", "test-bucket")
+AIRBUS_DATA_BUCKET = os.getenv("AIRBUS_DATA_BUCKET", "test-bucket")
 
 # Root path for FastAPI
 RC_FASTAPI_ROOT_PATH = os.getenv("RC_FASTAPI_ROOT_PATH", "/api/catalogue")
@@ -746,18 +747,22 @@ async def order_item(
     if radar_options:
         order_options["radarOptions"] = radar_options
 
-    status, added_keys, stac_item_key, transformed_item_key, item_data = (
-        upload_stac_hierarchy_for_order(
-            base_item_url,
-            catalog.value,
-            collection.value,
-            item,
-            workspace,
-            order_options,
-            S3_BUCKET,
-            tag,
-            location_url,
-        )
+    (
+        status,
+        added_keys,
+        stac_item_key,
+        transformed_item_key,
+        item_data,
+    ) = upload_stac_hierarchy_for_order(
+        base_item_url,
+        catalog.value,
+        collection.value,
+        item,
+        workspace,
+        order_options,
+        S3_BUCKET,
+        tag,
+        location_url,
     )
 
     logging.info(f"Status: {status}")
@@ -817,10 +822,10 @@ async def order_item(
     }
     if collection.value == OrderableAirbusCollection.sar.value:
         adaptor_name = "airbus-sar-adaptor"
-        commercial_data_bucket = "commercial-data-airbus"
+        commercial_data_bucket = AIRBUS_DATA_BUCKET
     elif collection.value in optical_collections:
         adaptor_name = "airbus-optical-adaptor"
-        commercial_data_bucket = "airbus-commercial-data"
+        commercial_data_bucket = AIRBUS_DATA_BUCKET
     else:
         adaptor_name = "planet-adaptor"
         commercial_data_bucket = S3_BUCKET
