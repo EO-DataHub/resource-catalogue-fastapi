@@ -409,6 +409,7 @@ def get_api_key(provider: str, workspace: str) -> str:
 
     # Initialize Kubernetes API client
     config.load_incluster_config()
+
     v1 = client.CoreV1Api()
     namespace = f"ws-{workspace}"
     secretId = f"{namespace}-{CLUSTER_PREFIX}"
@@ -429,7 +430,17 @@ def get_api_key(provider: str, workspace: str) -> str:
     # Initialize AWS Secrets Manager client and fetch the provider's ciphertext
     logging.info(f"Fetching ciphertext for provider '{provider}' from AWS Secrets Manager...")
     secrets_client = boto3.client("secretsmanager")
-    response = secrets_client.get_secret_value(SecretId=secretId)
+
+    try:
+        response = secrets_client.get_secret_value(SecretId=secretId)
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
+            logging.error(
+                f"ResourceNotFoundException in AWS secrets manager for secretId {secretId}: {e}"
+            )
+            return None
+        else:
+            raise e
 
     # Extract the secret string and parse it as JSON
     secret_string = response.get("SecretString", "{}")

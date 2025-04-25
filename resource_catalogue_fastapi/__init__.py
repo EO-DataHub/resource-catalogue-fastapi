@@ -926,22 +926,24 @@ def quote(
 
     if catalog.value == OrderableCatalogue.airbus.value:
 
+        # Get the contract ID. If contract_id is None, it is a SAR collection.
+        # If err is not None, the user does not have access to the collection
+        contract_id, err = airbus_client.get_contract_id(workspace, collection.value)
+
+        if err is not None:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": f"You do not have access to quote this item. Reason: {err}"},
+            )
+
         if collection.value == OrderableAirbusCollection.sar.value:
+
             if AIRBUS_ENV == "prod":
                 url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
             else:
                 url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
             request_body = {"acquisitions": [item], "orderTemplate": licence.airbus_value}
         elif collection.value in {e.value for e in OrderableAirbusCollection}:
-
-            # Get the contract ID
-            contract_id, err = airbus_client.get_contract_id(workspace, collection.value)
-
-            if err is not None:
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": f"You do not have access to quote this item. Reason: {err}"},
-                )
 
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             spectral_processing = "bundle"
