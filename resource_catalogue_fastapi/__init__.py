@@ -58,7 +58,7 @@ OPA_SERVICE_ENDPOINT = os.getenv(
 ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "false"))
 
 # S3 buckets to store user data and receive commercial data
-S3_BUCKET = os.getenv("S3_BUCKET", "test-bucket")
+WORKSPACE_DATA_BUCKET = os.getenv("WORKSPACE_DATA_BUCKET", "test-bucket")
 AIRBUS_DATA_BUCKET = os.getenv("AIRBUS_DATA_BUCKET", "test-bucket")
 
 # Root path for FastAPI
@@ -458,7 +458,7 @@ def upload_nested_files(
         logger.info(f"Uploading item to workspace {workspace} with key {workspace_key}")
 
         # Upload item to S3
-        upload_file_s3(body, S3_BUCKET, workspace_key)
+        upload_file_s3(body, WORKSPACE_DATA_BUCKET, workspace_key)
 
         logger.info("Item uploaded successfully")
 
@@ -500,7 +500,7 @@ async def create_item(
     output_data = {
         "id": f"{workspace}/create_item",
         "workspace": workspace,
-        "bucket_name": S3_BUCKET,
+        "bucket_name": WORKSPACE_DATA_BUCKET,
         "added_keys": keys.get("added_keys", []),
         "updated_keys": keys.get("updated_keys", []),
         "deleted_keys": [],
@@ -534,12 +534,12 @@ async def delete_item(
         workspace_key += ".json"
 
     logger.info(f"Deleting item from workspace {workspace} with key {workspace_key}")
-    delete_file_s3(S3_BUCKET, workspace_key)
+    delete_file_s3(WORKSPACE_DATA_BUCKET, workspace_key)
 
     output_data = {
         "id": f"{workspace}/delete_item",
         "workspace": workspace,
-        "bucket_name": S3_BUCKET,
+        "bucket_name": WORKSPACE_DATA_BUCKET,
         "added_keys": [],
         "updated_keys": [],
         "deleted_keys": [workspace_key],
@@ -570,7 +570,7 @@ async def update_item(
     output_data = {
         "id": f"{workspace}/update_item",
         "workspace": workspace,
-        "bucket_name": S3_BUCKET,
+        "bucket_name": WORKSPACE_DATA_BUCKET,
         "added_keys": keys.get("added_keys", []),
         "updated_keys": keys.get("updated_keys", []),
         "deleted_keys": [],
@@ -760,7 +760,7 @@ async def order_item(
         item,
         workspace,
         order_options,
-        S3_BUCKET,
+        WORKSPACE_DATA_BUCKET,
         tag,
         location_url,
     )
@@ -813,7 +813,7 @@ async def order_item(
     output_data = {
         "id": f"{workspace}/order_item",
         "workspace": workspace,
-        "bucket_name": S3_BUCKET,
+        "bucket_name": WORKSPACE_DATA_BUCKET,
         "added_keys": added_keys,
         "updated_keys": [],
         "deleted_keys": [],
@@ -828,7 +828,7 @@ async def order_item(
         commercial_data_bucket = AIRBUS_DATA_BUCKET
     else:
         adaptor_name = "planet-adaptor"
-        commercial_data_bucket = S3_BUCKET
+        commercial_data_bucket = WORKSPACE_DATA_BUCKET
 
     product_bundle_value = product_bundle.value
     if radar_options:
@@ -839,9 +839,9 @@ async def order_item(
             workspace,
             adaptor_name,
             authorization,
-            f"s3://{S3_BUCKET}/{stac_item_key}",
+            f"s3://{WORKSPACE_DATA_BUCKET}/{stac_item_key}",
             commercial_data_bucket,
-            S3_BUCKET,
+            WORKSPACE_DATA_BUCKET,
             PULSAR_URL,
             product_bundle_value,
             order_request.coordinates,
@@ -853,8 +853,8 @@ async def order_item(
     except Exception as e:
         logger.error(f"Error executing order workflow: {e}")
         update_stac_order_status(item_data, None, OrderStatus.FAILED.value)
-        upload_file_s3(json.dumps(item_data), S3_BUCKET, stac_item_key)
-        upload_file_s3(json.dumps(item_data), S3_BUCKET, transformed_item_key)
+        upload_file_s3(json.dumps(item_data), WORKSPACE_DATA_BUCKET, stac_item_key)
+        upload_file_s3(json.dumps(item_data), WORKSPACE_DATA_BUCKET, transformed_item_key)
         logger.info(f"Sending message to pulsar: {output_data}")
         producer.send((json.dumps(output_data)).encode("utf-8"))
         raise HTTPException(status_code=500, detail="Error executing order workflow") from e

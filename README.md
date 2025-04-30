@@ -19,7 +19,8 @@ OPA_SERVICE_ENDPOINT
 Other environment variables which should be set in order to run the server correctly include:
 ```commandline
 WORKSPACES_DOMAIN
-S3_BUCKET
+WORKSPACE_DATA_BUCKET
+AIRBUS_DATA_BUCKET
 PULSAR_URL
 ```
 ## Getting started
