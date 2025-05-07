@@ -454,13 +454,13 @@ def get_api_key(provider: str, workspace: str) -> str:
         )
 
     # Decrypt the API key using the OTP key
-    plaintext_api_key = decrypt_airbus_api_key(ciphertext_b64, otp_key_b64)
+    plaintext_api_key = decrypt_api_key(ciphertext_b64, otp_key_b64)
 
     logging.info(f"Successfully fetched API key for {provider}")
     return plaintext_api_key
 
 
-def decrypt_airbus_api_key(ciphertext_b64: str, otp_key_b64: str) -> str:
+def decrypt_api_key(ciphertext_b64: str, otp_key_b64: str) -> str:
     """
     Decrypts a ciphertext using One-Time Pad (OTP) via XOR.
 
