@@ -243,6 +243,13 @@ def upload_stac_hierarchy_for_order(
 
     item_data["id"] = item_data.get("id", "") + tag
 
+    item_title = f"Order: {item_id}"
+    if product_bundle := order_options.get("product_bundle", ""):
+        item_title.append(f" - {product_bundle}")
+    if order_options.get("coordinates"):
+        item_title.append(" (Clipped)")
+    item_data["properties"]["title"] = item_title
+
     update_stac_order_status(item_data, None, OrderStatus.PENDING.value)
     item_data["assets"] = {}
 
