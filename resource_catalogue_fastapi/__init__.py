@@ -1072,7 +1072,15 @@ def quote(
         try:
             response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
         except requests.RequestException as e:
-            return JSONResponse(status_code=500, content={"detail": str(e)})
+            error_response = e.response
+            if error_response:
+                logger.error(f"Error response: {error_response.text}")
+                return JSONResponse(
+                    status_code=error_response.status_code,
+                    content={"detail": error_response.text},
+                )
+            else:
+                return JSONResponse(status_code=500, content={"detail": str(e)})
 
         price_json = {}
         if collection.value == OrderableAirbusCollection.sar.value:
