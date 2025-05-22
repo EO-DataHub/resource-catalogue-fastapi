@@ -932,9 +932,9 @@ def quote(
             status_code=403,
             content={
                 "detail": (
-                    f"{a_or_an(catalog.value)} {catalog.value} API key could not be found for this "
-                    "workspace. An API key must be linked to obtain quotes for commercial data. "
-                    "Please check that an API key is linked in your workspace settings."
+                    f"{a_or_an(catalog.value)} {catalog.value.capitalize()} API key could not be "
+                    "found for this workspace. An API key must be linked to obtain quotes for "
+                    "commercial data. Please check that an API key is linked in your workspace settings."
                 )
             },
         )
