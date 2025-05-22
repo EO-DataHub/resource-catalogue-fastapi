@@ -1073,6 +1073,7 @@ def quote(
             response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
         except requests.RequestException as e:
             error_response = e.response
+            logger.debug(f"Error response: {error_response}")
             if error_response:
                 logger.error(f"Error response: {error_response.text}")
                 return JSONResponse(
