@@ -1074,10 +1074,12 @@ def quote(
         except requests.RequestException as e:
             error_response = e.response
             if error_response is not None:
-                logger.error(f"Error response: {error_response.text}")
+                logger.error(f"Error response: {error_response.json()}")
                 return JSONResponse(
                     status_code=error_response.status_code,
-                    content={"detail": error_response.text},
+                    content={
+                        "detail": error_response.json().get("message", str(error_response.text))
+                    },
                 )
             else:
                 return JSONResponse(status_code=500, content={"detail": str(e)})
