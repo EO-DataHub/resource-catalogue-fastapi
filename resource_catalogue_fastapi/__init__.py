@@ -178,7 +178,7 @@ class ItemRequest(BaseModel):
 class ProductBundle(str, Enum):
     """Product bundles for Planet and Airbus optical data"""
 
-    general_use = "General use"
+    general_use = "General Use"
     visual = "Visual"
     basic = "Basic"
     analytic = "Analytic"
@@ -642,7 +642,7 @@ async def order_item(
         Body(
             examples=[
                 {
-                    "productBundle": "General use",
+                    "productBundle": "General Use",
                 },
                 {
                     "productBundle": "Analytic",
@@ -887,7 +887,7 @@ def quote(
                         [[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]
                     ],
                     "licence": "Standard",
-                    "productBundle": "General use",
+                    "productBundle": "General Use",
                 }
             ],
         ),
@@ -898,11 +898,11 @@ def quote(
     * coordinates: (optional) Coordinates to limit the AOI of the item for purchase where possible.
       Given in the same nested format as STAC
     * licence: (Airbus-only) The licence type for the order
-    * productBundle: (optional, default=General use") Product bundle requested for order
+    * productBundle: (optional, default=General Use") Product bundle requested for order
     """
 
     coordinates = body.coordinates
-    product_bundle = body.productBundle if body.productBundle else "General use"
+    product_bundle = body.productBundle if body.productBundle else "General Use"
     licence = validate_licence(collection.value, body.licence)
 
     order_url = str(request.url)
