@@ -924,9 +924,19 @@ def quote(
     api_key = get_api_key(catalog.value, workspace)
 
     if api_key is None:
+
+        def a_or_an(word: str) -> str:
+            return "An" if word[0].lower() in "aeiou" else "A"
+
         return JSONResponse(
             status_code=403,
-            content={"detail": "You do not have access to quote this item"},
+            content={
+                "detail": (
+                    f"{a_or_an(catalog.value)} {catalog.value.capitalize()} API key could not be "
+                    "found for this workspace. An API key must be linked to obtain quotes for "
+                    "commercial data. Please check that an API key is linked in your workspace settings."
+                )
+            },
         )
 
     if catalog.value == OrderableCatalogue.airbus.value:
@@ -1062,7 +1072,17 @@ def quote(
         try:
             response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
         except requests.RequestException as e:
-            return JSONResponse(status_code=500, content={"detail": str(e)})
+            error_response = e.response
+            if error_response is not None:
+                logger.error(f"Error response: {error_response.json()}")
+                return JSONResponse(
+                    status_code=error_response.status_code,
+                    content={
+                        "detail": error_response.json().get("message", str(error_response.text))
+                    },
+                )
+            else:
+                return JSONResponse(status_code=500, content={"detail": str(e)})
 
         price_json = {}
         if collection.value == OrderableAirbusCollection.sar.value:
