@@ -607,7 +607,7 @@ def test_fetch_airbus_asset_success(mock_generate_token, mock_requests_get):
     ]
 
     response = client.get(
-        "/stac/catalogs/commercial/airbus/collections/collection/items/item/thumbnail"
+        "/stac/catalogs/commercial/catalogs/airbus/collections/collection/items/item/thumbnail"
     )
 
     assert response.status_code == 200
@@ -631,7 +631,7 @@ def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
     mock_requests_get.side_effect = [mock_item_response]
 
     response = client.get(
-        "/stac/catalogs/commercial/airbus/collections/collection/items/item/thumbnail"
+        "/stac/catalogs/commercial/catalogs/airbus/collections/collection/items/item/thumbnail"
     )
 
     assert response.status_code == 404

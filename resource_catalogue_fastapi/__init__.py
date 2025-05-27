@@ -1144,14 +1144,6 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
     dependencies=[Depends(ensure_user_logged_in)],
 )
-@app.get(
-    "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
-    dependencies=[Depends(ensure_user_logged_in)],
-)
-@app.get(
-    "/stac/catalogs/commercial/airbus/collections/{collection}/items/{item}/thumbnail",
-    dependencies=[Depends(ensure_user_logged_in)],
-)
 async def get_thumbnail(collection: str, item: str):
     """Endpoint to get the thumbnail of an item"""
     try:
@@ -1164,14 +1156,6 @@ async def get_thumbnail(collection: str, item: str):
 # Support multiple paths for backward compatibility. Set to commercial when data is properly ingested
 @app.get(
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
-    dependencies=[Depends(ensure_user_logged_in)],
-)
-@app.get(
-    "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
-    dependencies=[Depends(ensure_user_logged_in)],
-)
-@app.get(
-    "/stac/catalogs/commercial/airbus/collections/{collection}/items/{item}/quicklook",
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_quicklook(collection: str, item: str):
