@@ -228,7 +228,7 @@ def test_order_item_success_airbus_phr(
 
     # Define the request payload
     payload = {
-        "productBundle": "General use",
+        "productBundle": "General Use",
         "licence": "Standard",
     }
 
@@ -253,7 +253,7 @@ def test_order_item_success_airbus_phr(
             order_options = properties.get("order_options")
             assert order_options.get("endUser").get("endUserName") == "test_user"
             assert order_options.get("licence") == "standard"
-            assert order_options.get("productBundle") == "General use"
+            assert order_options.get("productBundle") == "General Use"
             found = True
             break
 
@@ -500,7 +500,7 @@ def test_order_item_invalid(
 
     # Define the request payload
     payload = {
-        "productBundle": "General use",
+        "productBundle": "General Use",
         "licence": "Invalid licence",
     }
 
