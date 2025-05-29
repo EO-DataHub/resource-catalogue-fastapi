@@ -607,7 +607,7 @@ def test_fetch_airbus_asset_success(mock_generate_token, mock_requests_get):
     ]
 
     response = client.get(
-        "/stac/catalogs/supported-datasets/airbus/collections/collection/items/item/thumbnail"
+        "/stac/catalogs/commercial/catalogs/airbus/collections/collection/items/item/thumbnail"
     )
 
     assert response.status_code == 200
@@ -631,7 +631,7 @@ def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
     mock_requests_get.side_effect = [mock_item_response]
 
     response = client.get(
-        "/stac/catalogs/supported-datasets/airbus/collections/collection/items/item/thumbnail"
+        "/stac/catalogs/commercial/catalogs/airbus/collections/collection/items/item/thumbnail"
     )
 
     assert response.status_code == 404
@@ -639,7 +639,7 @@ def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
 
     # Verify interactions with mocks
     mock_requests_get.assert_called_once_with(
-        "https://dev.eodatahub.org.uk/api/catalogue/stac/catalogs/supported-datasets/catalogs/airbus/collections/collection/items/item"
+        "https://dev.eodatahub.org.uk/api/catalogue/stac/catalogs/commercial/catalogs/airbus/collections/collection/items/item"
     )
 
 

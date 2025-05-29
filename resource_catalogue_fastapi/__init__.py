@@ -137,7 +137,6 @@ def ensure_user_logged_in(request: Request):
 class ParentCatalogue(str, Enum):
     """Parent catalogue for commercial data in the resource catalogue"""
 
-    supported_datasets = "supported-datasets"
     commercial = "commercial"
 
 
@@ -1138,7 +1137,7 @@ def quote(
 
 def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     """Fetch an asset via an external link in an Airbus item, using a generated access token"""
-    item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}"
+    item_url = f"https://{EODH_DOMAIN}/api/catalogue/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}"
     logger.info(f"Fetching item data from {item_url}")
     item_response = requests.get(item_url)
     item_response.raise_for_status()
@@ -1165,14 +1164,6 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
     dependencies=[Depends(ensure_user_logged_in)],
 )
-@app.get(
-    "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
-    dependencies=[Depends(ensure_user_logged_in)],
-)
-@app.get(
-    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail",
-    dependencies=[Depends(ensure_user_logged_in)],
-)
 async def get_thumbnail(collection: str, item: str):
     """Endpoint to get the thumbnail of an item"""
     try:
@@ -1187,14 +1178,6 @@ async def get_thumbnail(collection: str, item: str):
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
     dependencies=[Depends(ensure_user_logged_in)],
 )
-@app.get(
-    "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
-    dependencies=[Depends(ensure_user_logged_in)],
-)
-@app.get(
-    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/quicklook",
-    dependencies=[Depends(ensure_user_logged_in)],
-)
 async def get_quicklook(collection: str, item: str):
     """Endpoint to get the quicklook of an item"""
     try:
@@ -1205,7 +1188,6 @@ async def get_quicklook(collection: str, item: str):
 
 
 @app.get("/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail")
-@app.get("/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail")
 async def get_airbus_collection_thumbnail(collection: str):
     """Endpoint to get the thumbnail of an Airbus collection"""
     # Thumbnail is a local file, return it directly
