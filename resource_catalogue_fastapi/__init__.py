@@ -137,6 +137,7 @@ def ensure_user_logged_in(request: Request):
 class ParentCatalogue(str, Enum):
     """Parent catalogue for commercial data in the resource catalogue"""
 
+    supported_datasets = "supported-datasets"
     commercial = "commercial"
 
 
@@ -1139,9 +1140,17 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     )
 
 
-# Support multiple paths for backward compatibility. Set to commercial when data is properly ingested
+# for unused supported-datasets catalogue - to be removed in a future release
 @app.get(
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+@app.get(
+    "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+@app.get(
+    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail",
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_thumbnail(collection: str, item: str):
@@ -1153,9 +1162,17 @@ async def get_thumbnail(collection: str, item: str):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# Support multiple paths for backward compatibility. Set to commercial when data is properly ingested
+# for unused supported-datasets catalogue - to be removed in a future release
 @app.get(
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+@app.get(
+    "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
+    dependencies=[Depends(ensure_user_logged_in)],
+)
+@app.get(
+    "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/quicklook",
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_quicklook(collection: str, item: str):
@@ -1167,7 +1184,9 @@ async def get_quicklook(collection: str, item: str):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+# for unused supported-datasets catalogue - to be removed in a future release
 @app.get("/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail")
+@app.get("/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail")
 async def get_airbus_collection_thumbnail(collection: str):
     """Endpoint to get the thumbnail of an Airbus collection"""
     # Thumbnail is a local file, return it directly
