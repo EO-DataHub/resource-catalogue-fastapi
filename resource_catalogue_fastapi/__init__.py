@@ -229,7 +229,6 @@ class LicenceOptical(str, Enum):
 
     def airbus_value(self, collection: str):
         """Map the licence type to the Airbus API value"""
-        logger.info(f"Mapping licence {self.value} for collection {collection}")
         mappings = {
             "Standard": "standard",
             "Background Layer": "background_layer",
@@ -254,7 +253,6 @@ class LicenceOptical(str, Enum):
                 "Standard Multi End-Users (11-30)": "Standard_11_30",
                 "Standard Multi End-Users (>30)": "Standard_up_30",
             }
-        logger.info(f"Mappings for licence {self.value}: {mappings}")
 
         return mappings[self.value]
 
