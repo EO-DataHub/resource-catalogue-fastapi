@@ -332,7 +332,7 @@ def test_order_item_success_airbus_pneo(
             order_options = properties.get("order_options")
             assert order_options.get("endUser").get("endUserName") == "test_user"
             assert order_options.get("endUser").get("country") == "GB"
-            assert order_options.get("licence") == "standard_up_30"
+            assert order_options.get("licence") == "Standard_up_30"
             assert order_options.get("productBundle") == "Visual"
             found = True
             break
