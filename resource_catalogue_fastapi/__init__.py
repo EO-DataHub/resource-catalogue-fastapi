@@ -229,6 +229,7 @@ class LicenceOptical(str, Enum):
 
     def airbus_value(self, collection: str):
         """Map the licence type to the Airbus API value"""
+        logger.info(f"Mapping licence {self.value} for collection {collection}")
         mappings = {
             "Standard": "standard",
             "Background Layer": "background_layer",
