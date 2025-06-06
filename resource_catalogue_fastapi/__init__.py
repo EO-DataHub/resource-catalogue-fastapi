@@ -241,7 +241,7 @@ class LicenceOptical(str, Enum):
             "Standard Multi End-Users (11-30)": "standard_11_30",
             "Standard Multi End-Users (>30)": "standard_up_30",
         }
-        if collection == OrderableAirbusCollection.pneo.value:
+        if collection.value == OrderableAirbusCollection.pneo.value:
             # PNEO collection uses different licence names
             mappings = {
                 "Standard": "standard",
@@ -254,6 +254,7 @@ class LicenceOptical(str, Enum):
                 "Standard Multi End-Users (11-30)": "Standard_11_30",
                 "Standard Multi End-Users (>30)": "Standard_up_30",
             }
+        logger.info(f"Mappings for licence {self.value}: {mappings}")
 
         return mappings[self.value]
 
