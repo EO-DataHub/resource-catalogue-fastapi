@@ -227,7 +227,7 @@ class LicenceOptical(str, Enum):
     STANDARD_MULTI_11_30 = "Standard Multi End-Users (11-30)"
     STANDARD_MULTI_30 = "Standard Multi End-Users (>30)"
 
-    def airbus_value(self, collection: OrderableCollection):
+    def airbus_value(self, collection: str):
         """Map the licence type to the Airbus API value"""
         mappings = {
             "Standard": "standard",
@@ -240,7 +240,7 @@ class LicenceOptical(str, Enum):
             "Standard Multi End-Users (11-30)": "standard_11_30",
             "Standard Multi End-Users (>30)": "standard_up_30",
         }
-        if collection == OrderableAirbusCollection.pneo:
+        if collection == OrderableAirbusCollection.pneo.value:
             # PNEO collection uses different licence names
             mappings = {
                 "Standard": "standard",
