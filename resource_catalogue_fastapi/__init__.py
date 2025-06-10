@@ -203,9 +203,9 @@ class LicenceRadar(str, Enum):
     MULTI_2_5 = "Multi User (2 - 5) Licence"
     MULTI_6_30 = "Multi User (6 - 30) Licence"
 
-    @property
-    def airbus_value(self):
+    def airbus_value(self, collection: OrderableCollection):
         """Map the licence type to the Airbus API value"""
+        # collection not used in this mapping, but kept for consistency
         mappings = {
             "Single User Licence": "Single User License",
             "Multi User (2 - 5) Licence": "Multi User (2 - 5) License",
@@ -227,8 +227,7 @@ class LicenceOptical(str, Enum):
     STANDARD_MULTI_11_30 = "Standard Multi End-Users (11-30)"
     STANDARD_MULTI_30 = "Standard Multi End-Users (>30)"
 
-    @property
-    def airbus_value(self):
+    def airbus_value(self, collection: str):
         """Map the licence type to the Airbus API value"""
         mappings = {
             "Standard": "standard",
@@ -241,6 +240,20 @@ class LicenceOptical(str, Enum):
             "Standard Multi End-Users (11-30)": "standard_11_30",
             "Standard Multi End-Users (>30)": "standard_up_30",
         }
+        if collection.value == OrderableAirbusCollection.pneo.value:
+            # PNEO collection uses different licence names
+            mappings = {
+                "Standard": "standard",
+                "Background Layer": "background_layer",
+                "Standard + Background Layer": "stand_background_layer",
+                "Academic": "Academic",
+                "Media Licence": "media",
+                "Standard Multi End-Users (2-5)": "Standard_1_5",
+                "Standard Multi End-Users (6-10)": "Standard_6_10",
+                "Standard Multi End-Users (11-30)": "Standard_11_30",
+                "Standard Multi End-Users (>30)": "Standard_up_30",
+            }
+
         return mappings[self.value]
 
 
@@ -742,7 +755,7 @@ async def order_item(
         "productBundle": product_bundle.value,
         "coordinates": coordinates,
         "endUser": {"country": order_request.endUserCountry, "endUserName": username},
-        "licence": licence.airbus_value if licence else None,
+        "licence": licence.airbus_value(collection) if licence else None,
     }
     if radar_options:
         order_options["radarOptions"] = radar_options
@@ -846,7 +859,7 @@ async def order_item(
             product_bundle_value,
             order_request.coordinates,
             end_users,
-            licence.airbus_value if licence else None,
+            licence.airbus_value(collection) if licence else None,
             CLUSTER_PREFIX,
         )
         logger.info(f"Response from ADES: {ades_response}")
@@ -957,7 +970,10 @@ def quote(
                 url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
             else:
                 url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
-            request_body = {"acquisitions": [item], "orderTemplate": licence.airbus_value}
+            request_body = {
+                "acquisitions": [item],
+                "orderTemplate": licence.airbus_value(collection),
+            }
         elif collection.value in {e.value for e in OrderableAirbusCollection}:
 
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
@@ -1033,7 +1049,7 @@ def quote(
                             {"key": "delivery_method", "value": "on_the_flow"},
                             {"key": "fullStrip", "value": "false"},
                             {"key": "image_format", "value": "dimap_geotiff"},
-                            {"key": "licence", "value": licence.airbus_value},
+                            {"key": "licence", "value": licence.airbus_value(collection)},
                             {"key": "pixel_coding", "value": "12bits"},
                             {"key": "priority", "value": "standard"},
                             {"key": "processing_level", "value": "primary"},
