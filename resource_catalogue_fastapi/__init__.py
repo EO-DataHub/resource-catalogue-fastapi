@@ -498,6 +498,7 @@ async def health_check():
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
     deprecated=True,
+    tags=["Legacy"],
 )
 async def create_item(
     workspace: str,
@@ -530,6 +531,7 @@ async def create_item(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
     deprecated=True,
+    tags=["Legacy"],
 )
 async def delete_item(
     workspace: str,
@@ -568,6 +570,7 @@ async def delete_item(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
     deprecated=True,
+    tags=["Legacy"],
 )
 async def update_item(
     workspace: str,
@@ -1186,13 +1189,30 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     dependencies=[Depends(ensure_user_logged_in)],
     tags=["Commercial Data"],
     summary="Get the thumbnail of an Airbus item",
+    responses={
+        200: {
+            "content": {
+                "image/jpeg": {},
+                "image/png": {},
+                "application/octet-stream": {},
+            },
+            "description": (
+                "Proxies an external Airbus thumbnail image. "
+                "The response is usually an image, but is not guaranteed."
+            ),
+        },
+        404: {"description": "Not found"},
+        500: {"description": "Proxy error"},
+    },
 )
 @app.get(
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
+    tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
 @app.get(
     "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail",
+    tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_thumbnail(collection: str, item: str):
@@ -1211,13 +1231,30 @@ async def get_thumbnail(collection: str, item: str):
     dependencies=[Depends(ensure_user_logged_in)],
     tags=["Commercial Data"],
     summary="Get the quicklook of an Airbus item",
+    responses={
+        200: {
+            "content": {
+                "image/jpeg": {},
+                "image/png": {},
+                "application/octet-stream": {},
+            },
+            "description": (
+                "Proxies an external Airbus quicklook image. "
+                "The response is usually an image, but is not guaranteed."
+            ),
+        },
+        404: {"description": "Not found"},
+        500: {"description": "Proxy error"},
+    },
 )
 @app.get(
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
+    tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
 @app.get(
     "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/quicklook",
+    tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_quicklook(collection: str, item: str):
@@ -1233,10 +1270,14 @@ async def get_quicklook(collection: str, item: str):
 # for unused supported-datasets catalogue - to be removed in a future release
 @app.get(
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail",
+    response_class=FileResponse,
     tags=["Commercial Data"],
     summary="Get the thumbnail of an Airbus collection",
 )
-@app.get("/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail")
+@app.get(
+    "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail",
+    tags=["Legacy"],
+)
 async def get_airbus_collection_thumbnail(collection: str):
     """Endpoint to get the thumbnail of an Airbus collection"""
     # Thumbnail is a local file, return it directly
