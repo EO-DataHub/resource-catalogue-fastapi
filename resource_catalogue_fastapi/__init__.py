@@ -600,6 +600,7 @@ async def update_item(
     "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item}/order",
     dependencies=[Depends(ensure_user_can_access_a_workspace)],
     tags=["Commercial Data"],
+    summary="Order commercial data",
     responses={
         201: {
             "content": {
@@ -886,6 +887,7 @@ async def order_item(
     responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
     dependencies=[Depends(ensure_user_logged_in)],
     tags=["Commercial Data"],
+    summary="Obtain a quote for commercial data",
 )
 def quote(
     request: Request,
@@ -1183,6 +1185,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
     dependencies=[Depends(ensure_user_logged_in)],
     tags=["Commercial Data"],
+    summary="Get the thumbnail of an Airbus item",
 )
 @app.get(
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
@@ -1193,7 +1196,8 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_thumbnail(collection: str, item: str):
-    """Endpoint to get the thumbnail of an item"""
+    """Provides a proxy to access external Airbus thumbnail images using an API key.
+    Requires the user to be logged in."""
     try:
         return fetch_airbus_asset(collection, item, "thumbnail")
 
@@ -1206,6 +1210,7 @@ async def get_thumbnail(collection: str, item: str):
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
     dependencies=[Depends(ensure_user_logged_in)],
     tags=["Commercial Data"],
+    summary="Get the quicklook of an Airbus item",
 )
 @app.get(
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
@@ -1216,7 +1221,8 @@ async def get_thumbnail(collection: str, item: str):
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_quicklook(collection: str, item: str):
-    """Endpoint to get the quicklook of an item"""
+    """Provides a proxy to access external Airbus quicklook images using an API key.
+    Requires the user to be logged in."""
     try:
         return fetch_airbus_asset(collection, item, "quicklook")
 
@@ -1228,6 +1234,7 @@ async def get_quicklook(collection: str, item: str):
 @app.get(
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail",
     tags=["Commercial Data"],
+    summary="Get the thumbnail of an Airbus collection",
 )
 @app.get("/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail")
 async def get_airbus_collection_thumbnail(collection: str):
