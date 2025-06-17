@@ -479,7 +479,11 @@ def upload_nested_files(
     return keys, ordered_item_key
 
 
-@app.get("/manage/health", summary="Health Check", tags=["Health Check Endpoints"])
+@app.get(
+    "/manage/health",
+    summary="Verify Airbus API key and connectivity",
+    tags=["Health Check Endpoints"],
+)
 async def health_check():
     """Health check endpoint to verify Airbus client connectivity"""
     try:
