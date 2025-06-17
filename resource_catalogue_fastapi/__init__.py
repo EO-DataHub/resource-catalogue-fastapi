@@ -479,7 +479,7 @@ def upload_nested_files(
     return keys, ordered_item_key
 
 
-@app.get("/manage/health", summary="Health Check")
+@app.get("/manage/health", summary="Health Check", tags=["Health Check Endpoints"])
 async def health_check():
     """Health check endpoint to verify Airbus client connectivity"""
     try:
@@ -599,6 +599,7 @@ async def update_item(
 @app.post(
     "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item}/order",
     dependencies=[Depends(ensure_user_can_access_a_workspace)],
+    tags=["Commercial Data"],
     responses={
         201: {
             "content": {
@@ -884,6 +885,7 @@ async def order_item(
     response_model_exclude_unset=True,
     responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
     dependencies=[Depends(ensure_user_logged_in)],
+    tags=["Commercial Data"],
 )
 def quote(
     request: Request,
@@ -1180,6 +1182,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
 @app.get(
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
     dependencies=[Depends(ensure_user_logged_in)],
+    tags=["Commercial Data"],
 )
 @app.get(
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
@@ -1202,6 +1205,7 @@ async def get_thumbnail(collection: str, item: str):
 @app.get(
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
     dependencies=[Depends(ensure_user_logged_in)],
+    tags=["Commercial Data"],
 )
 @app.get(
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
@@ -1221,7 +1225,10 @@ async def get_quicklook(collection: str, item: str):
 
 
 # for unused supported-datasets catalogue - to be removed in a future release
-@app.get("/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail")
+@app.get(
+    "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail",
+    tags=["Commercial Data"],
+)
 @app.get("/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail")
 async def get_airbus_collection_thumbnail(collection: str):
     """Endpoint to get the thumbnail of an Airbus collection"""
