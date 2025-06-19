@@ -479,7 +479,11 @@ def upload_nested_files(
     return keys, ordered_item_key
 
 
-@app.get("/manage/health", summary="Health Check")
+@app.get(
+    "/manage/health",
+    summary="Verify Airbus API key and connectivity",
+    tags=["Health Check Endpoints"],
+)
 async def health_check():
     """Health check endpoint to verify Airbus client connectivity"""
     try:
@@ -498,6 +502,7 @@ async def health_check():
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
     deprecated=True,
+    tags=["Legacy"],
 )
 async def create_item(
     workspace: str,
@@ -530,6 +535,7 @@ async def create_item(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
     deprecated=True,
+    tags=["Legacy"],
 )
 async def delete_item(
     workspace: str,
@@ -568,6 +574,7 @@ async def delete_item(
     "/manage/catalogs/user-datasets/{workspace}",
     dependencies=[Depends(workspace_access_dependency)],
     deprecated=True,
+    tags=["Legacy"],
 )
 async def update_item(
     workspace: str,
@@ -599,6 +606,8 @@ async def update_item(
 @app.post(
     "/stac/catalogs/{parent_catalog}/catalogs/{catalog}/collections/{collection}/items/{item}/order",
     dependencies=[Depends(ensure_user_can_access_a_workspace)],
+    tags=["Commercial Data"],
+    summary="Order commercial data",
     responses={
         201: {
             "content": {
@@ -884,6 +893,8 @@ async def order_item(
     response_model_exclude_unset=True,
     responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
     dependencies=[Depends(ensure_user_logged_in)],
+    tags=["Commercial Data"],
+    summary="Obtain a quote for commercial data",
 )
 def quote(
     request: Request,
@@ -1180,17 +1191,37 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
 @app.get(
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
     dependencies=[Depends(ensure_user_logged_in)],
+    tags=["Commercial Data"],
+    summary="Get the thumbnail of an Airbus item",
+    responses={
+        200: {
+            "content": {
+                "image/jpeg": {},
+                "image/png": {},
+                "application/octet-stream": {},
+            },
+            "description": (
+                "Proxies an external Airbus thumbnail image. "
+                "The response is usually an image, but is not guaranteed."
+            ),
+        },
+        404: {"description": "Not found"},
+        500: {"description": "Proxy error"},
+    },
 )
 @app.get(
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/thumbnail",
+    tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
 @app.get(
     "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/thumbnail",
+    tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_thumbnail(collection: str, item: str):
-    """Endpoint to get the thumbnail of an item"""
+    """Provides a proxy to access external Airbus thumbnail images using an API key.
+    Requires the user to be logged in."""
     try:
         return fetch_airbus_asset(collection, item, "thumbnail")
 
@@ -1202,17 +1233,37 @@ async def get_thumbnail(collection: str, item: str):
 @app.get(
     "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
     dependencies=[Depends(ensure_user_logged_in)],
+    tags=["Commercial Data"],
+    summary="Get the quicklook of an Airbus item",
+    responses={
+        200: {
+            "content": {
+                "image/jpeg": {},
+                "image/png": {},
+                "application/octet-stream": {},
+            },
+            "description": (
+                "Proxies an external Airbus quicklook image. "
+                "The response is usually an image, but is not guaranteed."
+            ),
+        },
+        404: {"description": "Not found"},
+        500: {"description": "Proxy error"},
+    },
 )
 @app.get(
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/items/{item}/quicklook",
+    tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
 @app.get(
     "/stac/catalogs/supported-datasets/airbus/collections/{collection}/items/{item}/quicklook",
+    tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
 async def get_quicklook(collection: str, item: str):
-    """Endpoint to get the quicklook of an item"""
+    """Provides a proxy to access external Airbus quicklook images using an API key.
+    Requires the user to be logged in."""
     try:
         return fetch_airbus_asset(collection, item, "quicklook")
 
@@ -1221,8 +1272,16 @@ async def get_quicklook(collection: str, item: str):
 
 
 # for unused supported-datasets catalogue - to be removed in a future release
-@app.get("/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail")
-@app.get("/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail")
+@app.get(
+    "/stac/catalogs/commercial/catalogs/airbus/collections/{collection}/thumbnail",
+    response_class=FileResponse,
+    tags=["Commercial Data"],
+    summary="Get the thumbnail of an Airbus collection",
+)
+@app.get(
+    "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail",
+    tags=["Legacy"],
+)
 async def get_airbus_collection_thumbnail(collection: str):
     """Endpoint to get the thumbnail of an Airbus collection"""
     # Thumbnail is a local file, return it directly
