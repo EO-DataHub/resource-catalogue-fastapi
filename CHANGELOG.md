@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.24 (2025-06-24)
+
+Improved error handling for incorrectly scoped tokens
+
 ## v0.1.23 (2025-06-19)
 
 Added tags and updated OpenAPI documentation
