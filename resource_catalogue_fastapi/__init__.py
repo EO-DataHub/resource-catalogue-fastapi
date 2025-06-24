@@ -728,11 +728,35 @@ async def order_item(
     )
 
     username, workspaces = get_user_details(request)
-    # workspaces from user details was originally a list, now usually expect string containing one workspace.
-    workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
+    if not workspaces:
+        workspace = None
+    elif isinstance(workspaces, str):
+        workspace = workspaces if workspaces.strip() else None
+    elif isinstance(workspaces, list):
+        valid_workspaces = [str(w) for w in workspaces if str(w).strip()]
+        if len(valid_workspaces) == 1:
+            workspace = valid_workspaces[0]
+        elif len(valid_workspaces) > 1:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Multiple workspaces found. "
+                    "Please ensure you are using authorisation scoped to a single workspace."
+                ),
+            )
+        else:
+            workspace = None
+    else:
+        workspace = None
+
     if not workspace:
-        # This should never occur due to the workspace access dependency
-        raise HTTPException(status_code=404)
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "No workspace could be found. Please ensure you have a workspace "
+                "and commercial API key linked in your workspace settings."
+            ),
+        )
 
     # validate an api key exists before ordering
     api_key = get_api_key(catalog.value, workspace)
@@ -936,11 +960,35 @@ def quote(
     _, workspaces = get_user_details(request)
 
     # workspaces from user details was originally a list, now usually expect string containing one workspace.
-    workspace = workspaces[0] if isinstance(workspaces, list) else workspaces
+    if not workspaces:
+        workspace = None
+    elif isinstance(workspaces, str):
+        workspace = workspaces if workspaces.strip() else None
+    elif isinstance(workspaces, list):
+        valid_workspaces = [str(w) for w in workspaces if str(w).strip()]
+        if len(valid_workspaces) == 1:
+            workspace = valid_workspaces[0]
+        elif len(valid_workspaces) > 1:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Multiple workspaces found. "
+                    "Please ensure you are using authorisation scoped to a single workspace."
+                ),
+            )
+        else:
+            workspace = None
+    else:
+        workspace = None
 
     if not workspace:
-        # This should never occur due to the workspace access dependency
-        raise HTTPException(status_code=404)
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "No workspace could be found. Please ensure you have a workspace "
+                "and commercial API key linked in your workspace settings."
+            ),
+        )
 
     message = None
 
