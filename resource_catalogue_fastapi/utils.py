@@ -17,6 +17,7 @@ import requests
 from botocore.exceptions import ClientError
 from fastapi import Depends, HTTPException, Request
 from kubernetes import client, config
+from shapely.geometry import mapping, shape
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
@@ -255,9 +256,25 @@ def upload_stac_hierarchy_for_order(
         item_title += " (Clipped)"
     item_data["properties"]["title"] = item_title
 
+    # Set the created and updated timestamps
     current_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     item_data["properties"]["created"] = current_time
     item_data["properties"]["updated"] = current_time
+
+    # Update item coordinates with the intersection of the image and AOI coordinates
+    aoi_coords = order_options.get("coordinates", [])
+    if aoi_coords:
+        aoi_geometry = {"type": "Polygon", "coordinates": [aoi_coords]}
+        image_geometry = item_data.get("geometry", {})
+        if image_geometry:
+            intersect_geometry = coordinates_intersection(image_geometry, aoi_geometry)
+            if intersect_geometry:
+                item_data["geometry"] = intersect_geometry
+            else:
+                raise ValueError("No intersection found between image geometry and AOI coordinates")
+        else:
+            # Original geometry not found. Unlikely case but assume the AOI is valid.
+            item_data["geometry"] = aoi_geometry
 
     # Fetch the STAC collection URL from the item links
     collection_url = None
@@ -498,3 +515,16 @@ def decrypt_api_key(ciphertext_b64: str, otp_key_b64: str) -> str:
     except Exception as e:
         logging.error(f"Decryption failed: {e}")
         return None
+
+
+def coordinates_intersection(image_geometry: dict, aoi_geometry: dict) -> dict:
+    """
+    Obtain the intersection between an image's geometry and an area of interest.
+    Geometry is expected to be in GeoJSON format.
+    """
+    image_shape = shape(image_geometry)
+    aoi_shape = shape(aoi_geometry)
+    intersection = image_shape.intersection(aoi_shape)
+    if intersection.is_empty:
+        return []
+    return mapping(intersection)

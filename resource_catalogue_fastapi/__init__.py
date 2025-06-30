@@ -722,7 +722,7 @@ async def order_item(
             tag += "-" + projection
     if coordinates:
         logging.info(f"Coordinates found: {coordinates}")
-        tag += "-" + str(hashlib.md5(str(order_request.coordinates).encode("utf-8")).hexdigest())
+        tag += "-" + str(hashlib.md5(str(coordinates).encode("utf-8")).hexdigest())
     tag = (
         f"_{tag[1:].replace(' ', '-')}"  # remove first character (hyphen), replace with underscore
     )
