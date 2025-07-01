@@ -264,7 +264,7 @@ def upload_stac_hierarchy_for_order(
     # Update item coordinates with the intersection of the image and AOI coordinates
     aoi_coords = order_options.get("coordinates", [])
     if aoi_coords:
-        aoi_geometry = {"type": "Polygon", "coordinates": [aoi_coords]}
+        aoi_geometry = {"type": "Polygon", "coordinates": aoi_coords}
         image_geometry = item_data.get("geometry", {})
         if image_geometry:
             intersect_geometry = coordinates_intersection(image_geometry, aoi_geometry)
