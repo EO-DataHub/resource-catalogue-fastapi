@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.25 (2025-07-01)
+
+- Geometry for ordered items are clipped by an AOI if provided
+- Dynamic versioning
+- Updated license
+
 ## v0.1.24 (2025-06-24)
 
 Improved error handling for incorrectly scoped tokens
