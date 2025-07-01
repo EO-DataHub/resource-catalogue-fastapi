@@ -7,6 +7,7 @@ from requests.models import Response
 
 from resource_catalogue_fastapi.airbus_client import AirbusClient
 
+
 @pytest.fixture
 def airbus_client():
     return AirbusClient(airbus_env="test")
