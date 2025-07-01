@@ -24,7 +24,7 @@
 
 [project]
 name = "resource-catalogue-fastapi"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A FastApi deployment to handle requests to update the resource catalogue"
 readme = "README.md"
 
@@ -115,7 +115,7 @@ changelog = "CHANGEME-https://github.com/UKEODHP/.../master/CHANGELOG.md"
 [build-system]
 # These are the assumed default build requirements from pip:
 # https://pip.pypa.io/en/stable/reference/pip/#pep-517-and-518-support
-requires = ["setuptools>=69.0.0", "wheel"]
+requires = ["setuptools>=69.0.0", "wheel", "setuptools-git-versioning>=2.0,<3"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
@@ -126,6 +126,9 @@ markers = [
 
 [tool.setuptools]
 packages = []
+
+[tool.setuptools-git-versioning]
+enabled = true
 
 [tool.black]
 line-length = 100
