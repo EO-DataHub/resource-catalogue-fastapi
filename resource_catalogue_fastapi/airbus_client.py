@@ -62,7 +62,11 @@ class AirbusClient:
         properties_response = requests.get(url, headers=headers)
 
         if properties_response.status_code != 200:
-            j = properties_response.json()
+            try:
+                j = properties_response.json()
+            except requests.exceptions.JSONDecodeError:
+                j = {"message": "Unknown error"}
+
             message = j.get("message", "Unknown error")
             raise HTTPException(status_code=400, detail=message)
 

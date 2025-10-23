@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.26 (2025-10-23)
+
+Improved Airbus country code response when an invalid token is provided
+
 ## v0.1.25 (2025-07-01)
 
 - Geometry for ordered items are clipped by an AOI if provided
