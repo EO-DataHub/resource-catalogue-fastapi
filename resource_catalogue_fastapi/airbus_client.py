@@ -60,7 +60,13 @@ class AirbusClient:
         access_token = self.generate_access_token()
         headers = {"Authorization": f"Bearer {access_token}"}
         properties_response = requests.get(url, headers=headers)
-        properties = properties_response.json().get("properties")
+
+        if properties_response.status_code != 200:
+            j = properties_response.json()
+            message = j.get("message", "Unknown error")
+            raise HTTPException(status_code=400, detail=message)
+
+        properties = properties_response.json().get("properties", [])
 
         countries = next((prop["values"] for prop in properties if prop["key"] == "countries"), [])
         country_ids = [country["id"] for country in countries]
