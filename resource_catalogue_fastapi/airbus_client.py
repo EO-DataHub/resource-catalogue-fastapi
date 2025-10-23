@@ -54,10 +54,10 @@ class AirbusClient:
         response.raise_for_status()
         return response.json()
 
-    def validate_country_code(self, country_code: str):
+    def validate_country_code(self, country_code: str, workspace: str = ""):
         """Ensure that a given country code is valid against current Airbus API"""
         url = "https://order.api.oneatlas.airbus.com/api/v1/properties"
-        access_token = self.generate_access_token()
+        access_token = self.generate_access_token(workspace=workspace)
         headers = {"Authorization": f"Bearer {access_token}"}
         properties_response = requests.get(url, headers=headers)
 

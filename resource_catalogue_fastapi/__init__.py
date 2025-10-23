@@ -848,7 +848,7 @@ async def order_item(
     if collection.value in optical_collections:
         end_users = []
         if country_code := order_request.endUserCountry:
-            airbus_client.validate_country_code(country_code)
+            airbus_client.validate_country_code(country_code, workspace=workspace)
             end_users = [{"endUserName": username, "country": country_code}]
     if collection.value == OrderableAirbusCollection.pneo.value and not end_users:
         raise HTTPException(
