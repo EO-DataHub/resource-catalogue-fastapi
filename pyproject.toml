@@ -101,6 +101,9 @@ dev = [
     "validate-pyproject>=0.24.1",
 ]
 
+[tool.uv]
+  constraint-dependencies = ["urllib3>=2.6.0"]
+
 # List URLs that are relevant to your project
 #
 # This field corresponds to the "Project-URL" and "Home-Page" metadata fields:
