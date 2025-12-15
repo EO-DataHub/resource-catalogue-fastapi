@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 import os
-from distutils.util import strtobool
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
 
@@ -27,6 +26,7 @@ from .utils import (
     get_path_params,
     get_user_details,
     rate_limiter_dependency,
+    strtobool,
     update_stac_order_status,
     upload_file_s3,
     upload_stac_hierarchy_for_order,
@@ -484,7 +484,7 @@ def upload_nested_files(
     summary="Verify Airbus API key and connectivity",
     tags=["Health Check Endpoints"],
 )
-async def health_check():
+def health_check():
     """Health check endpoint to verify Airbus client connectivity"""
     try:
         access_token = airbus_client.generate_access_token()
@@ -504,7 +504,7 @@ async def health_check():
     deprecated=True,
     tags=["Legacy"],
 )
-async def create_item(
+def create_item(
     workspace: str,
     request: ItemRequest,
     rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
@@ -537,7 +537,7 @@ async def create_item(
     deprecated=True,
     tags=["Legacy"],
 )
-async def delete_item(
+def delete_item(
     workspace: str,
     request: ItemRequest,
     rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
@@ -576,7 +576,7 @@ async def delete_item(
     deprecated=True,
     tags=["Legacy"],
 )
-async def update_item(
+def update_item(
     workspace: str,
     request: ItemRequest,
     rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
@@ -653,7 +653,7 @@ async def update_item(
         500: {"description": "Internal Server Error"},
     },
 )
-async def order_item(
+def order_item(
     request: Request,
     parent_catalog: ParentCatalogue,
     catalog: OrderableCatalogue,
@@ -1267,7 +1267,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
-async def get_thumbnail(collection: str, item: str):
+def get_thumbnail(collection: str, item: str):
     """Provides a proxy to access external Airbus thumbnail images using an API key.
     Requires the user to be logged in."""
     try:
@@ -1309,7 +1309,7 @@ async def get_thumbnail(collection: str, item: str):
     tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
-async def get_quicklook(collection: str, item: str):
+def get_quicklook(collection: str, item: str):
     """Provides a proxy to access external Airbus quicklook images using an API key.
     Requires the user to be logged in."""
     try:
@@ -1330,7 +1330,7 @@ async def get_quicklook(collection: str, item: str):
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail",
     tags=["Legacy"],
 )
-async def get_airbus_collection_thumbnail(collection: str):
+def get_airbus_collection_thumbnail(collection: str):
     """Endpoint to get the thumbnail of an Airbus collection"""
     # Thumbnail is a local file, return it directly
     thumbnail_path = f"resource_catalogue_fastapi/thumbnails/{collection}.jpg"

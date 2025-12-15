@@ -28,8 +28,8 @@ dynamic = ["version"]
 description = "A FastApi deployment to handle requests to update the resource catalogue"
 readme = "README.md"
 
-# Our target version is Python 3.11, but it may work with earlier versions.
-requires-python = ">=3.11"
+# Our target version is Python 3.13.
+requires-python = ">=3.13,<3.14"
 
 license = {file = "LICENSE"}
 
@@ -86,16 +86,23 @@ dependencies = [
   "kubernetes",
 ]
 
-# List additional groups of dependencies here (e.g. development
-# dependencies). Users will be able to install these using the "extras"
-# syntax, for example:
-#
-#   $ pip install sampleproject[dev]
-#
-# Similar to `dependencies` above, these must be valid existing
-# projects.
-[project.optional-dependencies] # Optional
-dev = ["pip-tools", "pytest", "pytest-xdist", "pytest-mock", "pytest-watcher", "black", "ruff", "isort", "pre-commit", "httpx", "requests-mock"]
+[dependency-groups] # Optional
+dev = [
+    "pytest",
+    "pytest-xdist",
+    "pytest-mock",
+    "pytest-watcher",
+    "black",
+    "ruff",
+    "isort",
+    "pre-commit",
+    "httpx",
+    "requests-mock",
+    "validate-pyproject>=0.24.1",
+]
+
+[tool.uv]
+  constraint-dependencies = ["urllib3>=2.6.0"]
 
 # List URLs that are relevant to your project
 #

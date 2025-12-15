@@ -2,6 +2,7 @@
 VERSION ?= latest
 IMAGENAME = resource-catalogue-fastapi
 DOCKERREPO ?= public.ecr.aws/eodh
+uv-run ?= uv run --no-sync
 
 dockerbuild:
 	DOCKER_BUILDKIT=1 docker build -t ${IMAGENAME}:${VERSION} .
@@ -11,48 +12,30 @@ dockerpush: dockerbuild
 	docker push ${DOCKERREPO}/${IMAGENAME}:${VERSION}
 
 test:
-	./venv/bin/ptw resource_catalogue_fastapi
+	${uv-run} ptw resource_catalogue_fastapi
 
 testonce:
-	./venv/bin/pytest
+	${uv-run} pytest
 
 ruff:
-	./venv/bin/ruff check .
+	${uv-run} ruff check .
 
 black:
-	./venv/bin/black .
+	${uv-run} black .
 
 isort:
-	./venv/bin/isort . --profile black
+	${uv-run} isort . --profile black
 
 validate-pyproject:
-	validate-pyproject pyproject.toml
+	${uv-run} validate-pyproject pyproject.toml
 
 lint: ruff black isort validate-pyproject
 
-requirements.txt: venv pyproject.toml
-	./venv/bin/pip-compile
-
-requirements-dev.txt: venv pyproject.toml
-	./venv/bin/pip-compile --extra dev -o requirements-dev.txt
-
-requirements: requirements.txt requirements-dev.txt
-
-requirements-update: venv
-	./venv/bin/pip-compile -U
-	./venv/bin/pip-compile --extra dev -o requirements-dev.txt -U
-
-venv:
-	virtualenv -p python3.11 venv
-	./venv/bin/python -m ensurepip -U
-	./venv/bin/pip3 install pip-tools
-
-.make-venv-installed: venv requirements.txt requirements-dev.txt
-	./venv/bin/pip3 install -r requirements.txt -r requirements-dev.txt
-	touch .make-venv-installed
+uv-sync:
+	${uv-run} sync --frozen
 
 .git/hooks/pre-commit:
-	./venv/bin/pre-commit install
+	${uv-run} pre-commit install
 	curl -o .pre-commit-config.yaml https://raw.githubusercontent.com/EO-DataHub/github-actions/main/.pre-commit-config-python.yaml
 
-setup: venv requirements .make-venv-installed .git/hooks/pre-commit
+setup: uv-sync .git/hooks/pre-commit
