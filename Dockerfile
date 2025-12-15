@@ -1,19 +1,20 @@
 # syntax=docker/dockerfile:1
-FROM python:3.11-slim-bullseye
+FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim
 
-RUN rm -f /etc/apt/apt.conf.d/docker-clean; \
-    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
-
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update -y && apt-get upgrade -y
+ENV UV_NO_DEV=1
 
 WORKDIR /app
-ADD LICENSE requirements.txt ./
-ADD pyproject.toml ./
-RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r requirements.txt .
 
-ADD static ./static/
-ADD resource_catalogue_fastapi ./resource_catalogue_fastapi/
+# Install dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project
 
-CMD ["uvicorn", "resource_catalogue_fastapi:app", "--host", "0.0.0.0", "--port", "8000"]
+COPY . /app
+
+# Sync the project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen
+
+CMD ["uv", "run", "--no-sync", "uvicorn", "resource_catalogue_fastapi:app", "--host", "0.0.0.0", "--port", "8000"]

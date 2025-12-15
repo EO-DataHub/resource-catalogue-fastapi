@@ -5,7 +5,6 @@ import os
 import time
 import urllib.request
 from datetime import datetime, timezone
-from distutils.util import strtobool
 from enum import Enum
 from typing import List, Optional, Union
 from urllib.parse import urlparse
@@ -23,6 +22,20 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ADES_URL = os.getenv("ADES_URL")
 WORKSPACES_CLAIM_PATH = os.getenv("WORKSPACES_CLAIM_PATH", "workspaces")
+
+
+def strtobool(val: str) -> bool:
+    """Convert a string representation of truth to True or False.
+
+    Replacement for deprecated distutils.util.strtobool (removed in Python 3.12+).
+    """
+    val = val.lower()
+    if val in ("y", "yes", "t", "true", "on", "1"):
+        return True
+    elif val in ("n", "no", "f", "false", "off", "0"):
+        return False
+    else:
+        raise ValueError(f"Invalid truth value {val!r}")
 
 
 class OrderStatus(str, Enum):

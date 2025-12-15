@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 import os
-from distutils.util import strtobool
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
 
@@ -27,6 +26,7 @@ from .utils import (
     get_path_params,
     get_user_details,
     rate_limiter_dependency,
+    strtobool,
     update_stac_order_status,
     upload_file_s3,
     upload_stac_hierarchy_for_order,
