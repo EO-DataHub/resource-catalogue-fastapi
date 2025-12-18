@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.27 (2025-12-18)
+
+### Changed
+
+- Migrated to `uv` Python package manager
+- Upgraded Python dependencies
+
+### Fixed
+
+- Removed `async` from endpoints that used blocking I/O operations
+
+
 ## v0.1.26 (2025-10-23)
 
 Improved Airbus country code response when an invalid token is provided
