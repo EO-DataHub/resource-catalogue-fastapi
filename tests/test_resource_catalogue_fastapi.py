@@ -1,6 +1,8 @@
 import base64
 import json
 import os
+from collections.abc import Iterator
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from resource_catalogue_fastapi import (
     OrderableCatalogue,
-    OrderablePlanetCollection,
+    ParentCatalogue,
     QuoteRequest,
     app,
     quote,
@@ -26,7 +28,7 @@ fake_contracts_b64 = base64.b64encode(json.dumps(fake_contracts).encode()).decod
 
 
 @pytest.fixture(autouse=True)
-def setenvvar(monkeypatch):
+def setenvvar(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     with patch.dict(os.environ, clear=True):
         envvars = {
             "PLANET_BASE_URL": "https://url.com/planet",
@@ -39,7 +41,7 @@ def setenvvar(monkeypatch):
 @patch("resource_catalogue_fastapi.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
-def test_create_item_success(mock_create_producer, mock_get_file_from_url, mock_upload_file_s3):
+def test_create_item_success(mock_create_producer: Any, mock_get_file_from_url: Any, mock_upload_file_s3: Any) -> None:
     # Mock the dependencies
     mock_get_file_from_url.return_value = b"file content"
     mock_producer = MagicMock()
@@ -57,38 +59,30 @@ def test_create_item_success(mock_create_producer, mock_get_file_from_url, mock_
 
     # Verify interactions with mocks
     mock_get_file_from_url.assert_called_once_with("http://example.com/file.json")
-    mock_upload_file_s3.assert_called_once_with(
-        b"file content", "test-bucket", "test-workspace/saved-data/file.json"
-    )
-    mock_create_producer.assert_called_once_with(
-        topic="transformed", producer_name="resource_catalogue_fastapi"
-    )
+    mock_upload_file_s3.assert_called_once_with(b"file content", "test-bucket", "test-workspace/saved-data/file.json")
+    mock_create_producer.assert_called_once_with(topic="transformed", producer_name="resource_catalogue_fastapi")
     mock_producer.send.assert_called_once()
 
 
 @patch("resource_catalogue_fastapi.delete_file_s3")
-def test_delete_item_success(mock_delete_file_s3):
+def test_delete_item_success(mock_delete_file_s3: Any) -> None:
     # Define the request payload
     payload = {"url": "http://example.com/file.json"}
 
     # Send the request
-    response = client.request(
-        "DELETE", "/manage/catalogs/user-datasets/test-workspace", json=payload
-    )
+    response = client.request("DELETE", "/manage/catalogs/user-datasets/test-workspace", json=payload)
 
     # Assertions
     assert response.status_code == 200
     assert response.json() == {"message": "Item deleted successfully"}
 
     # Verify interactions with mocks
-    mock_delete_file_s3.assert_called_once_with(
-        "test-bucket", "test-workspace/saved-data/file.json"
-    )
+    mock_delete_file_s3.assert_called_once_with("test-bucket", "test-workspace/saved-data/file.json")
 
 
 @patch("resource_catalogue_fastapi.upload_file_s3")
 @patch("resource_catalogue_fastapi.get_file_from_url")
-def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
+def test_update_item_success(mock_get_file_from_url: Any, mock_upload_file_s3: Any) -> None:
     # Mock the dependencies
     mock_get_file_from_url.return_value = b"file content"
 
@@ -104,9 +98,7 @@ def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
 
     # Verify interactions with mocks
     mock_get_file_from_url.assert_called_once_with("http://example.com/file.json")
-    mock_upload_file_s3.assert_called_once_with(
-        b"file content", "test-bucket", "test-workspace/saved-data/file.json"
-    )
+    mock_upload_file_s3.assert_called_once_with(b"file content", "test-bucket", "test-workspace/saved-data/file.json")
 
 
 @patch("resource_catalogue_fastapi.utils.upload_file_s3")
@@ -119,17 +111,16 @@ def test_update_item_success(mock_get_file_from_url, mock_upload_file_s3):
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
 def test_order_item_success_airbus_sar(
-    mock_create_producer,
-    mock_get_user_details,
-    mock_load_incluster_config,
-    mock_get_api_key,
-    mock_get_contract_id,
-    mock_get_request,
-    mock_post_request,
-    mock_get_file_from_url,
-    mock_upload_file_s3,
-):
-
+    mock_create_producer: Any,
+    mock_get_user_details: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+    mock_get_contract_id: Any,
+    mock_get_request: Any,
+    mock_post_request: Any,
+    mock_get_file_from_url: Any,
+    mock_upload_file_s3: Any,
+) -> None:
     # Mock the dependencies
     mock_load_incluster_config.return_value = None
     mock_get_api_key.return_value = "test-api-key"
@@ -196,16 +187,16 @@ def test_order_item_success_airbus_sar(
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
 def test_order_item_success_airbus_phr(
-    mock_create_producer,
-    mock_get_user_details,
-    mock_get_request,
-    mock_post_request,
-    mock_get_file_from_url,
-    mock_upload_file_s3,
-    mock_load_incluster_config,
-    mock_get_api_key,
-    mock_get_contract_id,
-):
+    mock_create_producer: Any,
+    mock_get_user_details: Any,
+    mock_get_request: Any,
+    mock_post_request: Any,
+    mock_get_file_from_url: Any,
+    mock_upload_file_s3: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+    mock_get_contract_id: Any,
+) -> None:
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
     mock_producer = MagicMock()
@@ -272,17 +263,17 @@ def test_order_item_success_airbus_phr(
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
 def test_order_item_success_airbus_pneo(
-    mock_create_producer,
-    mock_get_user_details,
-    mock_get_request,
-    mock_post_request,
-    mock_get_file_from_url,
-    mock_upload_file_s3,
-    mock_validate_country_code,
-    mock_load_incluster_config,
-    mock_get_api_key,
-    mock_get_contract_id,
-):
+    mock_create_producer: Any,
+    mock_get_user_details: Any,
+    mock_get_request: Any,
+    mock_post_request: Any,
+    mock_get_file_from_url: Any,
+    mock_upload_file_s3: Any,
+    mock_validate_country_code: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+    mock_get_contract_id: Any,
+) -> None:
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
     mock_producer = MagicMock()
@@ -351,16 +342,16 @@ def test_order_item_success_airbus_pneo(
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
 def test_order_item_success_airbus_spot(
-    mock_create_producer,
-    mock_get_user_details,
-    mock_get_request,
-    mock_post_request,
-    mock_get_file_from_url,
-    mock_upload_file_s3,
-    mock_load_incluster_config,
-    mock_get_api_key,
-    mock_get_contract_id,
-):
+    mock_create_producer: Any,
+    mock_get_user_details: Any,
+    mock_get_request: Any,
+    mock_post_request: Any,
+    mock_get_file_from_url: Any,
+    mock_upload_file_s3: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+    mock_get_contract_id: Any,
+) -> None:
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
     mock_producer = MagicMock()
@@ -426,15 +417,15 @@ def test_order_item_success_airbus_spot(
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
 def test_order_item_success_planet(
-    mock_create_producer,
-    mock_get_user_details,
-    mock_get_request,
-    mock_post_request,
-    mock_get_file_from_url,
-    mock_upload_file_s3,
-    mock_load_incluster_config,
-    mock_get_api_key,
-):
+    mock_create_producer: Any,
+    mock_get_user_details: Any,
+    mock_get_request: Any,
+    mock_post_request: Any,
+    mock_get_file_from_url: Any,
+    mock_upload_file_s3: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+) -> None:
     # Mock the dependencies
     mock_get_file_from_url.return_value = b'{"stac_item": "data"}'
     mock_producer = MagicMock()
@@ -490,9 +481,9 @@ def test_order_item_success_planet(
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
 def test_order_item_invalid(
-    mock_create_producer,
-    mock_get_user_details,
-):
+    mock_create_producer: Any,
+    mock_get_user_details: Any,
+) -> None:
     # Mock the dependencies
     mock_producer = MagicMock()
     mock_create_producer.return_value = mock_producer
@@ -524,16 +515,16 @@ def test_order_item_invalid(
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.pulsar_client.create_producer")
 def test_order_item_failure(
-    mock_create_producer,
-    mock_get_user_details,
-    mock_get_request,
-    mock_post_request,
-    mock_utils_upload_file_s3,
-    mock_upload_file_s3,
-    mock_load_incluster_config,
-    mock_get_api_key,
-    mock_get_contract_id,
-):
+    mock_create_producer: Any,
+    mock_get_user_details: Any,
+    mock_get_request: Any,
+    mock_post_request: Any,
+    mock_utils_upload_file_s3: Any,
+    mock_upload_file_s3: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+    mock_get_contract_id: Any,
+) -> None:
     # Mock the dependencies
     mock_producer = MagicMock()
     mock_create_producer.return_value = mock_producer
@@ -594,7 +585,7 @@ def test_order_item_failure(
 
 @patch("resource_catalogue_fastapi.requests.get")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_fetch_airbus_asset_success(mock_generate_token, mock_requests_get):
+def test_fetch_airbus_asset_success(mock_generate_token: Any, mock_requests_get: Any) -> None:
     mock_generate_token.return_value = "mocked_access_token"
     mock_item_response = MagicMock()
     mock_item_response.json.return_value = {
@@ -606,9 +597,7 @@ def test_fetch_airbus_asset_success(mock_generate_token, mock_requests_get):
         MagicMock(content=b"image data", headers={"Content-Type": "image/jpeg"}),
     ]
 
-    response = client.get(
-        "/stac/catalogs/commercial/catalogs/airbus/collections/collection/items/item/thumbnail"
-    )
+    response = client.get("/stac/catalogs/commercial/catalogs/airbus/collections/collection/items/item/thumbnail")
 
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "image/jpeg"
@@ -623,16 +612,14 @@ def test_fetch_airbus_asset_success(mock_generate_token, mock_requests_get):
 
 @patch("resource_catalogue_fastapi.requests.get")
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
+def test_fetch_airbus_asset_not_found(mock_generate_token: Any, mock_requests_get: Any) -> None:
     mock_generate_token.return_value = "mocked_access_token"
     mock_item_response = MagicMock()
     mock_item_response.json.return_value = {"assets": {}}
     mock_item_response.raise_for_status = MagicMock()
     mock_requests_get.side_effect = [mock_item_response]
 
-    response = client.get(
-        "/stac/catalogs/commercial/catalogs/airbus/collections/collection/items/item/thumbnail"
-    )
+    response = client.get("/stac/catalogs/commercial/catalogs/airbus/collections/collection/items/item/thumbnail")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "External thumbnail link not found in item"}
@@ -650,13 +637,13 @@ def test_fetch_airbus_asset_not_found(mock_generate_token, mock_requests_get):
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
 @patch("resource_catalogue_fastapi.get_user_details")
 def test_quote__airbus_sar(
-    mock_get_user_details,
-    mock_generate_airbus_access_token,
-    mock_get_quote_from_airbus,
-    mock_load_incluster_config,
-    mock_get_api_key,
-    mock_get_contract_id,
-):
+    mock_get_user_details: Any,
+    mock_generate_airbus_access_token: Any,
+    mock_get_quote_from_airbus: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+    mock_get_contract_id: Any,
+) -> None:
     result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = [
         {"acquisitionId": "otherId", "price": 200},
@@ -688,14 +675,14 @@ def test_quote__airbus_sar(
 @patch("resource_catalogue_fastapi.get_api_key")
 @patch("kubernetes.config.load_incluster_config")
 def test_quote__airbus_optical(
-    mock_load_incluster_config,
-    mock_get_api_key,
-    mock_get_user_details,
-    mock_get_contract_id,
-    mock_generate_airbus_access_token,
-    mock_get_quote_from_airbus,
-    mock_get_request,
-):
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+    mock_get_user_details: Any,
+    mock_get_contract_id: Any,
+    mock_generate_airbus_access_token: Any,
+    mock_get_quote_from_airbus: Any,
+    mock_get_request: Any,
+) -> None:
     result = {"units": "EUR", "value": 100}
 
     mock_load_incluster_config.return_value = None
@@ -728,16 +715,14 @@ def test_quote__airbus_optical(
 @patch("resource_catalogue_fastapi.requests.get")
 @patch("resource_catalogue_fastapi.get_user_details")
 def test_quote__airbus_optical_multi_order(
-    mock_get_user_details,
-    mock_get_request,
-    mock_load_incluster_config,
-    mock_get_api_key,
-    mock_get_contract_id,
-):
+    mock_get_user_details: Any,
+    mock_get_request: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+    mock_get_contract_id: Any,
+) -> None:
     mock_response = MagicMock()
-    mock_response.json.return_value = {
-        "properties": {"composed_of_acquisition_identifiers": [12345, 67890]}
-    }
+    mock_response.json.return_value = {"properties": {"composed_of_acquisition_identifiers": [12345, 67890]}}
 
     mock_load_incluster_config.return_value = None
     mock_get_api_key.return_value = "test-api-key"
@@ -762,11 +747,10 @@ def test_quote__airbus_optical_multi_order(
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.get_api_key")
 def test_quote__planet(
-    mock_get_api_key,
-    mock_get_user_details,
-    mock_get_quote_from_planet,
-):
-
+    mock_get_api_key: Any,
+    mock_get_user_details: Any,
+    mock_get_quote_from_planet: Any,
+) -> None:
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
 
     mock_get_api_key.return_value = "test-api-key"
@@ -779,7 +763,7 @@ def test_quote__planet(
     )
     assert response.status_code == 200
     assert response.json() == {"value": 34, "units": "km2"}
-    mock_get_quote_from_planet.assert_called_once_with("12345", "PSScene", None)
+    mock_get_quote_from_planet.assert_called_once_with("12345", "PSScene", [])
 
 
 @patch("resource_catalogue_fastapi.get_api_key")
@@ -788,19 +772,17 @@ def test_quote__planet(
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
 @patch("resource_catalogue_fastapi.get_user_details")
 def test_quote_invalid_token(
-    mock_get_user_details,
-    mock_generate_access_token,
-    mock_read_secret,
-    mock_load_incluster_config,
-    mock_get_api_key,
-):
+    mock_get_user_details: Any,
+    mock_generate_access_token: Any,
+    mock_read_secret: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+) -> None:
     mock_load_incluster_config.return_value = None
     mock_generate_access_token.return_value = None
 
     mock_contracts = {
-        "contracts": base64.b64encode(
-            json.dumps({"sar": True, "optical": {}}).encode("utf-8")
-        ).decode("utf-8")
+        "contracts": base64.b64encode(json.dumps({"sar": True, "optical": {}}).encode("utf-8")).decode("utf-8")
     }
 
     mock_read_secret.return_value = MagicMock(data=mock_contracts)
@@ -827,13 +809,13 @@ def test_quote_invalid_token(
 @patch("resource_catalogue_fastapi.airbus_client.AirbusClient.generate_access_token")
 @patch("resource_catalogue_fastapi.get_user_details")
 def test_quote_id_not_matched(
-    mock_get_user_details,
-    mock_generate_access_token,
-    mock_get_quote_from_airbus,
-    mock_load_incluster_config,
-    mock_get_api_key,
-    mock_get_contract_id,
-):
+    mock_get_user_details: Any,
+    mock_generate_access_token: Any,
+    mock_get_quote_from_airbus: Any,
+    mock_load_incluster_config: Any,
+    mock_get_api_key: Any,
+    mock_get_contract_id: Any,
+) -> None:
     mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}]
     mock_generate_access_token.return_value = "valid_token"
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
@@ -853,7 +835,7 @@ def test_quote_id_not_matched(
 
 @patch("resource_catalogue_fastapi.get_user_details")
 @patch("resource_catalogue_fastapi.get_api_key")
-def test_quote_from_planet(mock_get_api_key, mock_get_user_details, requests_mock):
+def test_quote_from_planet(mock_get_api_key: Any, mock_get_user_details: Any, requests_mock: Any) -> None:
     expected = {"value": 34, "units": "km2", "message": None}
 
     mock_get_user_details.return_value = ("test_user", ["test_workspace"])
@@ -871,11 +853,14 @@ def test_quote_from_planet(mock_get_api_key, mock_get_user_details, requests_moc
     request = MagicMock()
     request.url = "https://url.com"
 
+    collection_mock = MagicMock()
+    collection_mock.value = "PSScene"
+
     response = quote(
         request,
-        None,
+        ParentCatalogue.commercial,
         OrderableCatalogue("planet"),
-        OrderablePlanetCollection("PSScene"),
+        collection_mock,
         "test_id",
         body,
     )
@@ -883,7 +868,7 @@ def test_quote_from_planet(mock_get_api_key, mock_get_user_details, requests_moc
     assert response.__dict__ == expected
 
 
-def test_thumbnail_airbus_collection():
+def test_thumbnail_airbus_collection() -> None:
     response = client.get(
         "stac/catalogs/commercial/catalogs/airbus/collections/airbus_sar_data/thumbnail",
     )
