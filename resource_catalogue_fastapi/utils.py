@@ -6,7 +6,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -39,7 +39,7 @@ def strtobool(val: str) -> bool:
         raise ValueError(f"Invalid truth value {val!r}")
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     """Valid order statuses from the order STAC extension"""
 
     ORDERABLE = "orderable"

@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import os
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Annotated, Any
 
 import requests
@@ -128,14 +128,14 @@ def ensure_user_logged_in(request: Request) -> None:
             raise HTTPException(status_code=401, detail="Unauthorised")
 
 
-class ParentCatalogue(str, Enum):
+class ParentCatalogue(StrEnum):
     """Parent catalogue for commercial data in the resource catalogue"""
 
     supported_datasets = "supported-datasets"
     commercial = "commercial"
 
 
-class OrderableCatalogue(str, Enum):
+class OrderableCatalogue(StrEnum):
     """Catalogues for ordering commercial data"""
 
     planet = "planet"
@@ -145,7 +145,7 @@ class OrderableCatalogue(str, Enum):
 OrderablePlanetCollection = Enum("OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS})
 
 
-class OrderableAirbusCollection(str, Enum):
+class OrderableAirbusCollection(StrEnum):
     """Collections for ordering Airbus commercial data"""
 
     sar = "airbus_sar_data"
@@ -167,7 +167,7 @@ class ItemRequest(BaseModel):
     extra_data: dict[str, Any] | None = Field(default_factory=dict)
 
 
-class ProductBundle(str, Enum):
+class ProductBundle(StrEnum):
     """Product bundles for Planet and Airbus optical data"""
 
     general_use = "General Use"
@@ -179,7 +179,7 @@ class ProductBundle(str, Enum):
 product_bundle_no_aoi = [("SkySatCollect", ProductBundle.analytic)]
 
 
-class ProductBundleRadar(str, Enum):
+class ProductBundleRadar(StrEnum):
     """Product bundles for Airbus SAR data"""
 
     SSC = "SSC"
@@ -188,7 +188,7 @@ class ProductBundleRadar(str, Enum):
     EEC = "EEC"
 
 
-class LicenceRadar(str, Enum):
+class LicenceRadar(StrEnum):
     """Licence types for Airbus SAR data"""
 
     SINGLE = "Single User Licence"
@@ -206,7 +206,7 @@ class LicenceRadar(str, Enum):
         return mappings[self.value]
 
 
-class LicenceOptical(str, Enum):
+class LicenceOptical(StrEnum):
     """Licence types for Airbus optical data"""
 
     STANDARD = "Standard"
@@ -249,21 +249,21 @@ class LicenceOptical(str, Enum):
         return mappings[self.value]
 
 
-class Orbit(str, Enum):
+class Orbit(StrEnum):
     """Orbit types for Airbus SAR data"""
 
     RAPID = "rapid"
     SCIENCE = "science"
 
 
-class ResolutionVariant(str, Enum):
+class ResolutionVariant(StrEnum):
     """Resolution variants for Airbus SAR data"""
 
     RE = "RE"
     SE = "SE"
 
 
-class Projection(str, Enum):
+class Projection(StrEnum):
     """Projection types for Airbus SAR data"""
 
     AUTO = "Auto"
@@ -684,7 +684,7 @@ def order_item(
     licence = validate_licence(collection.value, order_request.licence)
     product_bundle = validate_product_bundle(collection.value, order_request.productBundle)
     radar_options = validate_radar_options(collection.value, order_request.radarOptions, product_bundle.value)
-    coordinates = order_request.coordinates if order_request.coordinates else None
+    coordinates = order_request.coordinates or None
 
     tag = ""
     if product_bundle:
@@ -922,7 +922,7 @@ def quote(
     """
 
     coordinates = body.coordinates
-    product_bundle = body.productBundle if body.productBundle else "General Use"
+    product_bundle = body.productBundle or "General Use"
     licence = validate_licence(collection.value, body.licence)
 
     order_url = str(request.url)
