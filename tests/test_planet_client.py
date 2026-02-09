@@ -4,11 +4,11 @@ from resource_catalogue_fastapi.planet_client import PlanetClient
 
 
 @pytest.fixture
-def planet_client():
+def planet_client() -> PlanetClient:
     return PlanetClient()
 
 
-def test_calculate_area(planet_client):
+def test_calculate_area(planet_client: PlanetClient) -> None:
     coordinates = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]
     area = planet_client.calculate_area(coordinates)
 
@@ -16,7 +16,7 @@ def test_calculate_area(planet_client):
 
 
 @pytest.mark.parametrize(
-    "area, expected_approximation",
+    ("area", "expected_approximation"),
     [
         pytest.param(0.9, 1),
         pytest.param(1, 1),
@@ -24,8 +24,7 @@ def test_calculate_area(planet_client):
         pytest.param(1.001, 2),
     ],
 )
-def test_round_area(planet_client, area, expected_approximation):
-
+def test_round_area(planet_client: PlanetClient, area: float, expected_approximation: int) -> None:
     approx_area = planet_client.round_area(area)
 
     assert approx_area == expected_approximation

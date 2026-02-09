@@ -24,55 +24,26 @@
 
 [project]
 name = "resource-catalogue-fastapi"
-dynamic = ["version"]
+version = "0.0.0"
 description = "A FastApi deployment to handle requests to update the resource catalogue"
 readme = "README.md"
-
-# Our target version is Python 3.13.
 requires-python = ">=3.13,<3.14"
-
 license = {file = "LICENSE"}
-
-# This should be your name or the name of the organization who originally
-# authored the project, and a valid email address corresponding to the name
-# listed.
 authors = [
   {name = "Telespazio UK Ltd", email = "alex.palmer@telespazio.com" }
 ]
-
 maintainers = [
   {name = "Telespazio UK Ltd", email = "alex.palmer@telespazio.com" }
 ]
-
-# Classifiers help users find your project by categorizing it.
-#
-# For a list of valid classifiers, see https://pypi.org/classifiers/
 classifiers = [
-  # How mature is this project? Common values are
-  #   3 - Alpha
-  #   4 - Beta
-  #   5 - Production/Stable
   "Development Status :: 3 - Alpha",
-
-  # Indicate who your project is intended for
   "Intended Audience :: Science/Research",
   "Intended Audience :: Developers",
-
-  # CHANGEME Pick your license as you wish
   "License :: OSI Approved :: Apache Software License",
-  # "License :: Other/Proprietary License",
-
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3 :: Only",
 ]
-
-# This field lists other packages that your project depends on to run.
-# Any package you put here will be installed by pip when your project is
-# installed, so they must be valid existing projects.
-#
-# For an analysis of this field vs pip's requirements files see:
-# https://packaging.python.org/discussions/install-requires-vs-requirements/
 dependencies = [
   "fastapi",
   "uvicorn",
@@ -86,95 +57,61 @@ dependencies = [
   "kubernetes",
 ]
 
-[dependency-groups] # Optional
+[dependency-groups]
 dev = [
+    "pre-commit",
+    "pyright",
     "pytest",
-    "pytest-xdist",
     "pytest-mock",
     "pytest-watcher",
-    "black",
+    "pytest-xdist",
     "ruff",
-    "isort",
-    "pre-commit",
+    "validate-pyproject",
     "httpx",
     "requests-mock",
-    "validate-pyproject>=0.24.1",
 ]
 
 [tool.uv]
-  constraint-dependencies = ["urllib3>=2.6.0"]
+package = true
 
-# List URLs that are relevant to your project
-#
-# This field corresponds to the "Project-URL" and "Home-Page" metadata fields:
-# https://packaging.python.org/specifications/core-metadata/#project-url-multiple-use
-# https://packaging.python.org/specifications/core-metadata/#home-page-optional
-#
-# Examples listed include a pattern for specifying where the package tracks
-# issues, where the source is hosted, where to say thanks to the package
-# maintainers, and where to support the project financially. The key is
-# what's used to render the link text on PyPI.
-[project.urls]  # Optional
-homepage = "https://github.com/UKEODHP/"
-repository = "CHANGEME-https://github.com/UKEODHP/..."
-changelog = "CHANGEME-https://github.com/UKEODHP/.../master/CHANGELOG.md"
+[project.urls]
+homepage = "https://github.com/EO-DataHub/resource-catalogue-fastapi"
+repository = "https://github.com/EO-DataHub/resource-catalogue-fastapi"
 
 [build-system]
-# These are the assumed default build requirements from pip:
-# https://pip.pypa.io/en/stable/reference/pip/#pep-517-and-518-support
-requires = ["setuptools>=69.0.0", "wheel", "setuptools-git-versioning>=2.0,<3"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+addopts = ["--import-mode=importlib"]
 markers = [
   "integrationtest: Integration test"
 ]
 
-[tool.setuptools]
-packages = []
-
-[tool.setuptools-git-versioning]
-enabled = true
-
-[tool.black]
-line-length = 100
-target-version = ['py311']
-
 [tool.ruff]
-line-length = 110
-target-version = "py311"
-select = ["E", "F", "B", "W"]
+line-length = 119
 
-exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".git-rewrite",
-    ".hg",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "venv",
+[tool.ruff.lint]
+select = [
+    "E",    # Pycodestyle errors
+    "W",    # Pycodestyle warnings
+    "F",    # Pyflakes
+    "I",    # isort
+    "FAST", # FastAPI
+    "RUF",  # RUF-specific rules
+    "SIM",  # Simplifications
+    "B",    # Bugbear
+    "ANN",  # Annotations
+    "PLC",  # Pylint convention
+    "PLE",  # Pylint errors
+    "UP",   # pyupgrade
+    "FURB", # refurb
+    "PT",   # pytest
 ]
-
-[tool.pylint.'MESSAGES CONTROL']
-disable = '''
-    line-too-long,
-    missing-class-docstring, 
-    too-many-locals, 
-    too-many-instance-attributes,
-    logging-fstring-interpolation,
-'''
+ignore = [
+    "E501",   # line too long
+    "SIM108", # ternary operator
+    "SIM103", # return bool directly
+    "B008",   # function call in default argument (incompatible with FastAPI)
+    "ANN401", # dynamically typed Any (needed for FastAPI Depends)
+]

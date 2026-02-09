@@ -2,7 +2,7 @@ import base64
 import json
 import logging
 import os
-from typing import Optional, Tuple
+from typing import Any
 
 import requests
 from fastapi import HTTPException
@@ -16,14 +16,16 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 class AirbusClient:
     """Client for Airbus API and Airbus-specific functions"""
 
-    def __init__(self, airbus_env: str):
+    def __init__(self, airbus_env: str) -> None:
         self.airbus_env = airbus_env
         self.airbus_api_key = os.getenv("AIRBUS_API_KEY")
 
-    def generate_access_token(self, workspace: str = "") -> str:
+    def generate_access_token(self, workspace: str = "") -> str | None:
         """Generate access token for Airbus API"""
         if self.airbus_env == "prod":
-            url = "https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token"
+            url = (
+                "https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token"
+            )
         else:
             url = "https://authenticate-int.idp.private.geoapi-airbusds.com/auth/realms/IDP/protocol/openid-connect/token"
 
@@ -54,7 +56,7 @@ class AirbusClient:
         response.raise_for_status()
         return response.json()
 
-    def validate_country_code(self, country_code: str):
+    def validate_country_code(self, country_code: str) -> None:
         """Ensure that a given country code is valid against current Airbus API"""
         url = "https://order.api.oneatlas.airbus.com/api/v1/properties"
         access_token = self.generate_access_token()
@@ -82,9 +84,7 @@ class AirbusClient:
                 detail=f"End user country code {country_code} is invalid. Valid codes are: {valid_codes}",
             )
 
-    def get_contract_id(
-        self, workspace: str, collection_id: str
-    ) -> Tuple[Optional[str], Optional[str]]:
+    def get_contract_id(self, workspace: str, collection_id: str) -> tuple[str | None, str | None]:
         """Retrieve the correct contract ID that is stored in a secret within the workspace.
         Each collection is associated with different contract_ids"""
 
@@ -93,9 +93,9 @@ class AirbusClient:
         try:
             config.load_incluster_config()
             v1 = client.CoreV1Api()
-            secret = v1.read_namespaced_secret("otp-airbus", f"ws-{workspace}")
+            secret: Any = v1.read_namespaced_secret("otp-airbus", f"ws-{workspace}")
 
-        except client.exceptions.ApiException as e:
+        except Exception as e:
             logger.error(f"Error fetching secret: {e}")
             return None, "Linked Account not found."
 
@@ -128,20 +128,15 @@ class AirbusClient:
 
             if collection_id == "airbus_pneo_data":
                 # PNEO Contract
-                contract_id = next(
-                    (key for key, value in contracts_optical.items() if "PNEO" in value), None
-                )
+                contract_id = next((key for key, value in contracts_optical.items() if "PNEO" in value), None)
                 if contract_id is not None:
                     return contract_id, None
                 else:
                     return None, f"Airbus PNEO contract ID not found in workspace {workspace}"
 
             if collection_id in ["airbus_phr_data", "airbus_spot_data"]:
-
                 # LEGACY Contract
-                contract_id = next(
-                    (key for key, value in contracts_optical.items() if "LEGACY" in value), None
-                )
+                contract_id = next((key for key, value in contracts_optical.items() if "LEGACY" in value), None)
 
                 if contract_id is not None:
                     return contract_id, None

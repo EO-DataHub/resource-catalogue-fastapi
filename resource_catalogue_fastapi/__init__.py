@@ -2,8 +2,8 @@ import hashlib
 import json
 import logging
 import os
-from enum import Enum
-from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
+from enum import Enum, StrEnum
+from typing import Annotated, Any
 
 import requests
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
@@ -50,9 +50,7 @@ WORKSPACES_DOMAIN = os.getenv("WORKSPACES_DOMAIN", "workspaces.dev.eodhp.eco-ke-
 EODH_DOMAIN = os.getenv("EODH_DOMAIN", "dev.eodatahub.org.uk")
 
 # OPA service endpoint
-OPA_SERVICE_ENDPOINT = os.getenv(
-    "OPA_SERVICE_ENDPOINT", "http://opal-client.opal:8181/v1/data/workspaces/allow"
-)
+OPA_SERVICE_ENDPOINT = os.getenv("OPA_SERVICE_ENDPOINT", "http://opal-client.opal:8181/v1/data/workspaces/allow")
 
 # Used for local testing where OPA is not available
 ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "false"))
@@ -70,8 +68,8 @@ pulsar_client = PulsarClient(PULSAR_URL)
 producer = None
 
 AIRBUS_ENV = os.getenv("AIRBUS_ENV", "prod")
-airbus_client = AirbusClient(AIRBUS_ENV)
-planet_client = PlanetClient()
+airbus_client: AirbusClient = AirbusClient(AIRBUS_ENV)
+planet_client: PlanetClient = PlanetClient()
 
 PLANET_COLLECTIONS = os.getenv("PLANET_COLLECTIONS", "PSScene,SkySatCollect").split(",")
 
@@ -95,34 +93,30 @@ app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
 
 # Dependency function to get or create the producer
-def get_producer():
+def get_producer() -> Any:
     """Get or create a producer for the Pulsar client"""
     global producer
     if producer is None:
-        producer = pulsar_client.create_producer(
-            topic="transformed", producer_name="resource_catalogue_fastapi"
-        )
+        producer = pulsar_client.create_producer(topic="transformed", producer_name="resource_catalogue_fastapi")
     return producer
 
 
 async def workspace_access_dependency(
     request: Request,
-    path_params: dict = Depends(get_path_params),  # noqa: B008
-):
+    path_params: Any = Depends(get_path_params),
+) -> None:
     """Dependency to check if a user has access to a specified workspace"""
-    if ENABLE_OPA_POLICY_CHECK:
-        if not await check_user_can_access_requested_workspace(request, path_params):
-            raise HTTPException(status_code=403, detail="Access denied")
+    if ENABLE_OPA_POLICY_CHECK and not await check_user_can_access_requested_workspace(request, path_params):
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
-def ensure_user_can_access_a_workspace(request: Request):
+def ensure_user_can_access_a_workspace(request: Request) -> None:
     """Dependency to check if a user has access to a workspace"""
-    if ENABLE_OPA_POLICY_CHECK:
-        if not check_user_can_access_a_workspace(request):
-            raise HTTPException(status_code=403, detail="Access denied")
+    if ENABLE_OPA_POLICY_CHECK and not check_user_can_access_a_workspace(request):
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
-def ensure_user_logged_in(request: Request):
+def ensure_user_logged_in(request: Request) -> None:
     """Dependency to check if a user is logged in"""
     if ENABLE_OPA_POLICY_CHECK:
         username, _ = get_user_details(request)
@@ -134,26 +128,24 @@ def ensure_user_logged_in(request: Request):
             raise HTTPException(status_code=401, detail="Unauthorised")
 
 
-class ParentCatalogue(str, Enum):
+class ParentCatalogue(StrEnum):
     """Parent catalogue for commercial data in the resource catalogue"""
 
     supported_datasets = "supported-datasets"
     commercial = "commercial"
 
 
-class OrderableCatalogue(str, Enum):
+class OrderableCatalogue(StrEnum):
     """Catalogues for ordering commercial data"""
 
     planet = "planet"
     airbus = "airbus"
 
 
-OrderablePlanetCollection = Enum(
-    "OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS}
-)
+OrderablePlanetCollection = Enum("OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS})
 
 
-class OrderableAirbusCollection(str, Enum):
+class OrderableAirbusCollection(StrEnum):
     """Collections for ordering Airbus commercial data"""
 
     sar = "airbus_sar_data"
@@ -164,7 +156,7 @@ class OrderableAirbusCollection(str, Enum):
 
 # Combine the members of OrderableAirbusCollection and OrderablePlanetCollection
 combined_collections = {e.name: e.value for e in OrderableAirbusCollection}
-combined_collections.update({e.name: e.value for e in OrderablePlanetCollection})
+combined_collections.update({name: name for name in PLANET_COLLECTIONS})
 OrderableCollection = Enum("OrderableCollection", combined_collections)
 
 
@@ -172,10 +164,10 @@ class ItemRequest(BaseModel):
     """Request body for create, update and delete item endpoints"""
 
     url: str
-    extra_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    extra_data: dict[str, Any] | None = Field(default_factory=dict)
 
 
-class ProductBundle(str, Enum):
+class ProductBundle(StrEnum):
     """Product bundles for Planet and Airbus optical data"""
 
     general_use = "General Use"
@@ -187,7 +179,7 @@ class ProductBundle(str, Enum):
 product_bundle_no_aoi = [("SkySatCollect", ProductBundle.analytic)]
 
 
-class ProductBundleRadar(str, Enum):
+class ProductBundleRadar(StrEnum):
     """Product bundles for Airbus SAR data"""
 
     SSC = "SSC"
@@ -196,14 +188,14 @@ class ProductBundleRadar(str, Enum):
     EEC = "EEC"
 
 
-class LicenceRadar(str, Enum):
+class LicenceRadar(StrEnum):
     """Licence types for Airbus SAR data"""
 
     SINGLE = "Single User Licence"
     MULTI_2_5 = "Multi User (2 - 5) Licence"
     MULTI_6_30 = "Multi User (6 - 30) Licence"
 
-    def airbus_value(self, collection: OrderableCollection):
+    def airbus_value(self, collection: Enum) -> str:
         """Map the licence type to the Airbus API value"""
         # collection not used in this mapping, but kept for consistency
         mappings = {
@@ -214,7 +206,7 @@ class LicenceRadar(str, Enum):
         return mappings[self.value]
 
 
-class LicenceOptical(str, Enum):
+class LicenceOptical(StrEnum):
     """Licence types for Airbus optical data"""
 
     STANDARD = "Standard"
@@ -227,7 +219,7 @@ class LicenceOptical(str, Enum):
     STANDARD_MULTI_11_30 = "Standard Multi End-Users (11-30)"
     STANDARD_MULTI_30 = "Standard Multi End-Users (>30)"
 
-    def airbus_value(self, collection: str):
+    def airbus_value(self, collection: Enum) -> str:
         """Map the licence type to the Airbus API value"""
         mappings = {
             "Standard": "standard",
@@ -257,21 +249,21 @@ class LicenceOptical(str, Enum):
         return mappings[self.value]
 
 
-class Orbit(str, Enum):
+class Orbit(StrEnum):
     """Orbit types for Airbus SAR data"""
 
     RAPID = "rapid"
     SCIENCE = "science"
 
 
-class ResolutionVariant(str, Enum):
+class ResolutionVariant(StrEnum):
     """Resolution variants for Airbus SAR data"""
 
     RE = "RE"
     SE = "SE"
 
 
-class Projection(str, Enum):
+class Projection(StrEnum):
     """Projection types for Airbus SAR data"""
 
     AUTO = "Auto"
@@ -279,7 +271,7 @@ class Projection(str, Enum):
     UPS = "UPS"
 
     @property
-    def airbus_value(self):
+    def airbus_value(self) -> str:
         """Map the projection type to the Airbus API value"""
         mappings = {
             "Auto": "auto",
@@ -293,12 +285,12 @@ class RadarOptions(BaseModel):
     """Radar options for Airbus SAR data"""
 
     orbit: Orbit
-    resolutionVariant: Optional[ResolutionVariant] = None
-    projection: Optional[Projection] = None
+    resolutionVariant: ResolutionVariant | None = None
+    projection: Projection | None = None
 
-    def model_dump(self):
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
         """Return the model data as a dictionary to send to the Airbus API"""
-        data = super().model_dump()
+        data = super().model_dump(**kwargs)
         data = {k: v for k, v in data.items() if v is not None}
         if self.projection:
             data["projection"] = self.projection.airbus_value
@@ -308,19 +300,19 @@ class RadarOptions(BaseModel):
 class OrderRequest(BaseModel):
     """Request body for order endpoint"""
 
-    productBundle: Union[ProductBundle, ProductBundleRadar]
-    coordinates: Optional[list] = Field(default_factory=list)
-    endUserCountry: Optional[str] = None
-    licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
-    radarOptions: Optional[RadarOptions] = None
+    productBundle: ProductBundle | ProductBundleRadar
+    coordinates: list | None = Field(default_factory=list)
+    endUserCountry: str | None = None
+    licence: LicenceOptical | LicenceRadar | None = None
+    radarOptions: RadarOptions | None = None
 
 
 class QuoteRequest(BaseModel):
     """Request body for quote endpoint"""
 
-    coordinates: list = None
-    licence: Optional[Union[LicenceOptical, LicenceRadar]] = None
-    productBundle: Optional[ProductBundle] = None
+    coordinates: list | None = None
+    licence: LicenceOptical | LicenceRadar | None = None
+    productBundle: ProductBundle | None = None
 
 
 class QuoteResponse(BaseModel):
@@ -328,12 +320,12 @@ class QuoteResponse(BaseModel):
 
     value: float
     units: str
-    message: Optional[str] = None
+    message: str | None = None
 
 
 def validate_licence(
-    collection: str, licence: str
-) -> Optional[Union[LicenceOptical, LicenceRadar]]:
+    collection: str, licence: LicenceOptical | LicenceRadar | None
+) -> LicenceOptical | LicenceRadar | None:
     """Validate the licence type against allowed values for the collection"""
     if collection == OrderableAirbusCollection.sar.value:
         allowed_licences = {e.value for e in LicenceRadar}
@@ -365,9 +357,7 @@ def validate_licence(
     return None
 
 
-def validate_product_bundle(
-    collection: str, product_bundle: str
-) -> Union[ProductBundle, ProductBundleRadar]:
+def validate_product_bundle(collection: str, product_bundle: str) -> ProductBundle | ProductBundleRadar:
     """Validate the product bundle against allowed values for the collection"""
     if collection == OrderableAirbusCollection.sar.value:
         allowed_bundles = {e.value for e in ProductBundleRadar}
@@ -388,8 +378,8 @@ def validate_product_bundle(
 
 
 def validate_radar_options(
-    collection: str, radar_options: Optional[RadarOptions], product_bundle: str
-) -> Optional[Dict[str, Any]]:
+    collection: str, radar_options: RadarOptions | None, product_bundle: str
+) -> dict[str, Any] | None:
     """Validate the radar options for Airbus SAR data"""
     if collection != OrderableAirbusCollection.sar.value:
         return None
@@ -411,10 +401,7 @@ def validate_radar_options(
     if product_bundle == ProductBundleRadar.SSC.value and radar_options.resolutionVariant:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Resolution variant should not be provided for a radar item when the product "
-                "bundle is SSC."
-            ),
+            detail=("Resolution variant should not be provided for a radar item when the product bundle is SSC."),
         )
     if (
         product_bundle not in [ProductBundleRadar.SSC.value, ProductBundleRadar.MGD.value]
@@ -424,16 +411,10 @@ def validate_radar_options(
             status_code=400,
             detail="Projection is required for a radar item when the product bundle is not SSC or MGD.",
         )
-    if (
-        product_bundle in [ProductBundleRadar.SSC.value, ProductBundleRadar.MGD.value]
-        and radar_options.projection
-    ):
+    if product_bundle in [ProductBundleRadar.SSC.value, ProductBundleRadar.MGD.value] and radar_options.projection:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Projection should not be provided for a radar item when the product bundle is "
-                "SSC or MGD."
-            ),
+            detail=("Projection should not be provided for a radar item when the product bundle is SSC or MGD."),
         )
     radar_bundle = radar_options.model_dump()
     radar_bundle["product_type"] = product_bundle
@@ -441,8 +422,8 @@ def validate_radar_options(
 
 
 def upload_nested_files(
-    url: str, workspace: str, catalog_name: str = "saved-data", order_status: Optional[str] = None
-) -> Tuple[Dict[str, List[str]], Optional[str], str]:
+    url: str, workspace: str, catalog_name: str = "saved-data", order_status: str | None = None
+) -> tuple[dict[str, list[str]], str | None]:
     """Upload a file along with any nested files to a workspace"""
     files_to_add = get_nested_files_from_url(url)
     keys = {"added_keys": [], "updated_keys": []}
@@ -450,6 +431,9 @@ def upload_nested_files(
     for url_to_add in files_to_add:
         logger.info(f"Adding url {url_to_add}")
         body = get_file_from_url(url_to_add)
+        if body is None:
+            logger.error(f"Unable to access {url_to_add}")
+            continue
 
         # Extract the path after the first catalog from the URL to create the S3 key
         path_after_catalog = url_to_add.split("/", 9)[-1]
@@ -484,18 +468,16 @@ def upload_nested_files(
     summary="Verify Airbus API key and connectivity",
     tags=["Health Check Endpoints"],
 )
-def health_check():
+def health_check() -> JSONResponse:
     """Health check endpoint to verify Airbus client connectivity"""
     try:
         access_token = airbus_client.generate_access_token()
         if isinstance(access_token, str):
             return JSONResponse(content={"status": "healthy"}, status_code=200)
         else:
-            raise HTTPException(
-                status_code=500, detail="Airbus client failed to generate a valid access token"
-            )
+            raise HTTPException(status_code=500, detail="Airbus client failed to generate a valid access token")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Health check failed: {e!s}") from e
 
 
 @app.post(
@@ -507,9 +489,9 @@ def health_check():
 def create_item(
     workspace: str,
     request: ItemRequest,
-    rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
-    producer=Depends(get_producer),  # noqa: B008
-):
+    rate_limiter: Annotated[Any, Depends(rate_limiter_dependency)],
+    producer: Annotated[Any, Depends(get_producer)],
+) -> JSONResponse:
     """Endpoint to create a new item and collection within a workspace"""
 
     url = request.url
@@ -540,9 +522,9 @@ def create_item(
 def delete_item(
     workspace: str,
     request: ItemRequest,
-    rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
-    producer=Depends(get_producer),  # noqa: B008
-):
+    rate_limiter: Annotated[Any, Depends(rate_limiter_dependency)],
+    producer: Annotated[Any, Depends(get_producer)],
+) -> JSONResponse:
     """Endpoint to delete an item in a workspace's collection"""
 
     url = request.url
@@ -579,9 +561,9 @@ def delete_item(
 def update_item(
     workspace: str,
     request: ItemRequest,
-    rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
-    producer=Depends(get_producer),  # noqa: B008
-):
+    rate_limiter: Annotated[Any, Depends(rate_limiter_dependency)],
+    producer: Annotated[Any, Depends(get_producer)],
+) -> JSONResponse:
     """Endpoint to update an item and collection within a workspace"""
 
     url = request.url
@@ -615,9 +597,7 @@ def update_item(
                     "example": {
                         "type": "Feature",
                         "stac_version": "1.0.0",
-                        "stac_extensions": [
-                            "https://stac-extensions.github.io/order/v1.1.0/schema.json"
-                        ],
+                        "stac_extensions": ["https://stac-extensions.github.io/order/v1.1.0/schema.json"],
                         "id": "example-item",
                         "properties": {
                             "datetime": "2023-01-01T00:00:00Z",
@@ -685,8 +665,8 @@ def order_item(
             ]
         ),
     ],
-    producer=Depends(get_producer),  # noqa: B008
-):
+    producer: Annotated[Any, Depends(get_producer)],
+) -> JSONResponse:
     """Create a new item and collection within a workspace with an order status, and
     execute a workflow to order the item from a commercial data provider.
 
@@ -703,10 +683,8 @@ def order_item(
 
     licence = validate_licence(collection.value, order_request.licence)
     product_bundle = validate_product_bundle(collection.value, order_request.productBundle)
-    radar_options = validate_radar_options(
-        collection.value, order_request.radarOptions, product_bundle.value
-    )
-    coordinates = order_request.coordinates if order_request.coordinates else None
+    radar_options = validate_radar_options(collection.value, order_request.radarOptions, product_bundle.value)
+    coordinates = order_request.coordinates or None
 
     tag = ""
     if product_bundle:
@@ -723,9 +701,7 @@ def order_item(
     if coordinates:
         logging.info(f"Coordinates found: {coordinates}")
         tag += "-" + str(hashlib.md5(str(coordinates).encode("utf-8")).hexdigest())
-    tag = (
-        f"_{tag[1:].replace(' ', '-')}"  # remove first character (hyphen), replace with underscore
-    )
+    tag = f"_{tag[1:].replace(' ', '-')}"  # remove first character (hyphen), replace with underscore
 
     username, workspaces = get_user_details(request)
     if not workspaces:
@@ -841,9 +817,7 @@ def order_item(
         )
 
     # End users must be supplied for PNEO orders, and at least as an empty list for other optical orders
-    optical_collections = {
-        e.value for e in OrderableAirbusCollection if e != OrderableAirbusCollection.sar
-    }
+    optical_collections = {e.value for e in OrderableAirbusCollection if e != OrderableAirbusCollection.sar}
     end_users = None
     if collection.value in optical_collections:
         end_users = []
@@ -931,16 +905,14 @@ def quote(
         Body(
             examples=[
                 {
-                    "coordinates": [
-                        [[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]
-                    ],
+                    "coordinates": [[[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5], [8.1, 31.7]]],
                     "licence": "Standard",
                     "productBundle": "General Use",
                 }
             ],
         ),
     ],
-):
+) -> QuoteResponse | JSONResponse:
     """Return a quote for a Planet or Airbus item ID within an EODH catalogue and collection.
 
     * coordinates: (optional) Coordinates to limit the AOI of the item for purchase where possible.
@@ -950,7 +922,7 @@ def quote(
     """
 
     coordinates = body.coordinates
-    product_bundle = body.productBundle if body.productBundle else "General Use"
+    product_bundle = body.productBundle or "General Use"
     licence = validate_licence(collection.value, body.licence)
 
     order_url = str(request.url)
@@ -1012,7 +984,6 @@ def quote(
         )
 
     if catalog.value == OrderableCatalogue.airbus.value:
-
         # Get the contract ID. If contract_id is None, it is a SAR collection.
         # If err is not None, the user does not have access to the collection
         contract_id, err = airbus_client.get_contract_id(workspace, collection.value)
@@ -1024,19 +995,24 @@ def quote(
             )
 
         if collection.value == OrderableAirbusCollection.sar.value:
-
             if AIRBUS_ENV == "prod":
                 url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
             else:
                 url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
+            if licence is None:
+                raise HTTPException(status_code=400, detail="Licence is required for SAR quotes")
             request_body = {
                 "acquisitions": [item],
                 "orderTemplate": licence.airbus_value(collection),
             }
         elif collection.value in {e.value for e in OrderableAirbusCollection}:
-
+            if licence is None:
+                raise HTTPException(status_code=400, detail="Licence is required for Airbus quotes")
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             spectral_processing = "bundle"
+            product_type = ""
+            item_uuids: list | None = None
+            datastrip_id: str | None = None
             if collection.value == OrderableAirbusCollection.pneo.value:
                 # Check if item is part of a multi order
                 item_response = requests.get(base_item_url)
@@ -1046,9 +1022,7 @@ def quote(
                 product_type = "PleiadesNeoArchiveMono"
                 datastrip_id = None
                 item_uuids = [item_data.get("properties", {}).get("id")]
-                if multi_ids := item_data.get("properties", {}).get(  # noqa: F841
-                    "composed_of_acquisition_identifiers"
-                ):
+                if multi_ids := item_data.get("properties", {}).get("composed_of_acquisition_identifiers"):
                     item_uuids = []
                     product_type = "PleiadesNeoArchiveMulti"
                     spectral_processing = "full_bundle"
@@ -1132,15 +1106,11 @@ def quote(
         else:
             return JSONResponse(
                 status_code=404,
-                content={
-                    "detail": f"Collection {collection.value} not recognised as an Airbus collection"
-                },
+                content={"detail": f"Collection {collection.value} not recognised as an Airbus collection"},
             )
         access_token = airbus_client.generate_access_token(workspace)
         if not access_token:
-            return JSONResponse(
-                status_code=500, content={"detail": "Failed to generate access token"}
-            )
+            return JSONResponse(status_code=500, content={"detail": "Failed to generate access token"})
 
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
@@ -1152,9 +1122,7 @@ def quote(
                 logger.error(f"Error response: {error_response.json()}")
                 return JSONResponse(
                     status_code=error_response.status_code,
-                    content={
-                        "detail": error_response.json().get("message", str(error_response.text))
-                    },
+                    content={"detail": error_response.json().get("message", str(error_response.text))},
                 )
             else:
                 return JSONResponse(status_code=500, content={"detail": str(e)})
@@ -1177,20 +1145,16 @@ def quote(
         if price_json:
             return QuoteResponse(value=price_json["value"], units=price_json["units"])
 
-        return JSONResponse(
-            status_code=404, content={"detail": "Quote not found for given acquisition ID"}
-        )
+        return JSONResponse(status_code=404, content={"detail": "Quote not found for given acquisition ID"})
 
     elif catalog.value == OrderableCatalogue.planet.value:
         try:
             if (collection.value, product_bundle) in product_bundle_no_aoi:
                 # Not all product bundles allow clipping
                 coordinates = []
-                message = (
-                    "No AOI clipping available for this collection and product bundle combination"
-                )
+                message = "No AOI clipping available for this collection and product bundle combination"
 
-            area = planet_client.get_area_estimate(item, collection.value, coordinates)
+            area = planet_client.get_area_estimate(item, collection.value, coordinates or [])
 
             if collection.value == "SkySatScene" and area < 3:
                 # SkySatScene has a minimum order size of 3 km2
@@ -1206,7 +1170,7 @@ def quote(
 
     else:
         return JSONResponse(
-            content={"message:" f"{catalog.value} not recognised"},
+            content={f"message:{catalog.value} not recognised"},
             status_code=404,
         )
 
@@ -1249,8 +1213,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
                 "application/octet-stream": {},
             },
             "description": (
-                "Proxies an external Airbus thumbnail image. "
-                "The response is usually an image, but is not guaranteed."
+                "Proxies an external Airbus thumbnail image. The response is usually an image, but is not guaranteed."
             ),
         },
         404: {"description": "Not found"},
@@ -1267,7 +1230,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
     tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
-def get_thumbnail(collection: str, item: str):
+def get_thumbnail(collection: str, item: str) -> Response:
     """Provides a proxy to access external Airbus thumbnail images using an API key.
     Requires the user to be logged in."""
     try:
@@ -1291,8 +1254,7 @@ def get_thumbnail(collection: str, item: str):
                 "application/octet-stream": {},
             },
             "description": (
-                "Proxies an external Airbus quicklook image. "
-                "The response is usually an image, but is not guaranteed."
+                "Proxies an external Airbus quicklook image. The response is usually an image, but is not guaranteed."
             ),
         },
         404: {"description": "Not found"},
@@ -1309,7 +1271,7 @@ def get_thumbnail(collection: str, item: str):
     tags=["Legacy"],
     dependencies=[Depends(ensure_user_logged_in)],
 )
-def get_quicklook(collection: str, item: str):
+def get_quicklook(collection: str, item: str) -> Response:
     """Provides a proxy to access external Airbus quicklook images using an API key.
     Requires the user to be logged in."""
     try:
@@ -1330,7 +1292,7 @@ def get_quicklook(collection: str, item: str):
     "/stac/catalogs/supported-datasets/catalogs/airbus/collections/{collection}/thumbnail",
     tags=["Legacy"],
 )
-def get_airbus_collection_thumbnail(collection: str):
+def get_airbus_collection_thumbnail(collection: str) -> FileResponse:
     """Endpoint to get the thumbnail of an Airbus collection"""
     # Thumbnail is a local file, return it directly
     thumbnail_path = f"resource_catalogue_fastapi/thumbnails/{collection}.jpg"

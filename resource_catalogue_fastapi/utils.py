@@ -3,10 +3,11 @@ import json
 import logging
 import os
 import time
+import urllib.error
 import urllib.request
-from datetime import datetime, timezone
-from enum import Enum
-from typing import List, Optional, Union
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -38,7 +39,7 @@ def strtobool(val: str) -> bool:
         raise ValueError(f"Invalid truth value {val!r}")
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     """Valid order statuses from the order STAC extension"""
 
     ORDERABLE = "orderable"
@@ -56,7 +57,7 @@ def get_path_params(request: Request) -> dict:
     return request.scope.get("path_params", {})
 
 
-async def get_body_params(request: Request) -> Optional[dict]:
+async def get_body_params(request: Request) -> dict | None:
     """Get body parameters from the request"""
     try:
         body = await request.json()
@@ -66,7 +67,7 @@ async def get_body_params(request: Request) -> Optional[dict]:
         return None
 
 
-def get_nested_value(data: dict, path: str, default=None) -> Union[list, str]:
+def get_nested_value(data: dict, path: str, default: Any = None) -> list | str | Any:
     """Retrieve a nested value from a dictionary using a dot-separated path."""
     keys = path.split(".")
     for key in keys:
@@ -140,15 +141,13 @@ def check_user_can_access_a_workspace(request: Request) -> bool:
 last_deploy_times = {}
 
 
-def rate_limit(deploy_workspace: str):
+def rate_limit(deploy_workspace: str) -> None:
     """Rate limit requests"""
     current_time = time.time()
     print(last_deploy_times.get(deploy_workspace, 0))
     last_call_time = last_deploy_times.get(deploy_workspace, 0)
     if current_time - last_call_time < 5:
-        raise HTTPException(
-            status_code=429, detail="Too Many Requests: Please wait 5 seconds before retrying."
-        )
+        raise HTTPException(status_code=429, detail="Too Many Requests: Please wait 5 seconds before retrying.")
     last_deploy_times[deploy_workspace] = current_time
 
 
@@ -157,13 +156,13 @@ def get_workspace(request: Request) -> str:
     return request.path_params["workspace"]
 
 
-def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
+def rate_limiter_dependency(workspace: Any = Depends(get_workspace)) -> None:
     """Dependency to rate limit requests"""
     if strtobool(os.getenv("ENABLE_RATE_LIMIT", "false")):
         rate_limit(workspace)
 
 
-def upload_file_s3(body: str, bucket: str, key: str) -> bool:
+def upload_file_s3(body: str, bucket: str, key: str) -> None:
     """Upload data to an S3 bucket"""
     s3_client = boto3.client("s3")
 
@@ -174,7 +173,7 @@ def upload_file_s3(body: str, bucket: str, key: str) -> bool:
         raise
 
 
-def delete_file_s3(bucket: str, key: str):
+def delete_file_s3(bucket: str, key: str) -> None:
     """Delete a file from an S3 bucket."""
     try:
         s3_client = boto3.client("s3")
@@ -184,7 +183,7 @@ def delete_file_s3(bucket: str, key: str):
         raise
 
 
-def get_file_from_url(url: str, retries: int = 0) -> str:
+def get_file_from_url(url: str, retries: int = 0) -> str | None:
     """Returns contents of data available at given URL"""
     if retries == 3:
         # Max number of retries
@@ -228,7 +227,7 @@ def upload_stac_hierarchy_for_order(
     bucket: str,
     tag: str,
     location_url: str,
-):
+) -> tuple[str | None, list[str], str, str, dict]:
     """
     If not already in progress or completed, upload an item and its associated collection
     and catalog to the workspace to track an order
@@ -270,7 +269,7 @@ def upload_stac_hierarchy_for_order(
     item_data["properties"]["title"] = item_title
 
     # Set the created and updated timestamps
-    current_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    current_time = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     item_data["properties"]["created"] = current_time
     item_data["properties"]["updated"] = current_time
 
@@ -332,8 +331,7 @@ def upload_stac_hierarchy_for_order(
     item_key = f"{workspace}/{catalog_name}/{catalog_id}/{collection_id}/{item_id}{tag}.json"
 
     transformed_catalog_key = (
-        f"transformed/catalogs/user/catalogs/{workspace}/catalogs/{catalog_name}/catalogs/"
-        f"{catalog_id}.json"
+        f"transformed/catalogs/user/catalogs/{workspace}/catalogs/{catalog_name}/catalogs/{catalog_id}.json"
     )
     transformed_collection_key = (
         f"transformed/catalogs/user/catalogs/{workspace}/catalogs/{catalog_name}/catalogs/"
@@ -357,7 +355,7 @@ def upload_stac_hierarchy_for_order(
     return status, added_keys, item_key, transformed_item_key, item_data
 
 
-def update_stac_order_status(stac_item: dict, order_id: str, order_status: str):
+def update_stac_order_status(stac_item: dict, order_id: str | None, order_status: str) -> None:
     """Update the STAC item with the order status using the STAC Order extension"""
     # Update or add fields relating to the order
     if "properties" not in stac_item:
@@ -380,17 +378,17 @@ def execute_order_workflow(
     provider_workspace: str,
     user_workspace: str,
     workflow_name: str,
-    authorization: str,
+    authorization: str | None,
     stac_uri: str,
     commercial_data_bucket: str,
     workspace_bucket: str,
     pulsar_url: str,
     product_bundle: str,
-    coordinates: list,
-    end_users: Optional[List],
-    licence: Optional[str],
-    cluster_prefix: str,
-):
+    coordinates: list | None,
+    end_users: list | None,
+    licence: str | None,
+    cluster_prefix: str | None,
+) -> dict:
     """Executes a data adaptor workflow in the provider's workspace as the given user with auth"""
 
     url = f"{ADES_URL}/{provider_workspace}/processes/{workflow_name}/execution"
@@ -430,7 +428,7 @@ def execute_order_workflow(
     return response.json()
 
 
-def get_api_key(provider: str, workspace: str) -> str:
+def get_api_key(provider: str, workspace: str) -> str | None:
     """
     Retrieve an OTP (One-Time Pad) from Kubernetes Secrets and use it to decrypt
     an encrypted API key stored in AWS Secrets Manager.
@@ -455,12 +453,12 @@ def get_api_key(provider: str, workspace: str) -> str:
     logging.info("Fetching OTP key from Kubernetes...")
 
     try:
-        secret_data = v1.read_namespaced_secret(f"otp-{provider}", namespace)
+        secret_data: Any = v1.read_namespaced_secret(f"otp-{provider}", namespace)
         otp_key_b64 = secret_data.data.get("otp")  # Adjusted key name for OTP
 
         if not otp_key_b64:
             raise ValueError(f"OTP key not found in Kubernetes Secret in namespace {namespace}.")
-    except client.exceptions.ApiException as e:
+    except Exception as e:
         logging.error(f"Error fetching OTP key from Kubernetes: {e}")
         return None
 
@@ -472,9 +470,7 @@ def get_api_key(provider: str, workspace: str) -> str:
         response = secrets_client.get_secret_value(SecretId=secretId)
     except ClientError as e:
         if e.response["Error"]["Code"] == "ResourceNotFoundException":
-            logging.error(
-                f"ResourceNotFoundException in AWS secrets manager for secretId {secretId}: {e}"
-            )
+            logging.error(f"ResourceNotFoundException in AWS secrets manager for secretId {secretId}: {e}")
             return None
         else:
             raise e
@@ -486,9 +482,7 @@ def get_api_key(provider: str, workspace: str) -> str:
     # Retrieve the encrypted API key (Base64 encoded ciphertext)
     ciphertext_b64 = secret_dict.get(provider)
     if not ciphertext_b64:
-        raise ValueError(
-            f"Ciphertext (encrypted API key) not found in AWS Secrets Manager for provider {provider}."
-        )
+        raise ValueError(f"Ciphertext (encrypted API key) not found in AWS Secrets Manager for provider {provider}.")
 
     # Decrypt the API key using the OTP key
     plaintext_api_key = decrypt_api_key(ciphertext_b64, otp_key_b64)
@@ -497,7 +491,7 @@ def get_api_key(provider: str, workspace: str) -> str:
     return plaintext_api_key
 
 
-def decrypt_api_key(ciphertext_b64: str, otp_key_b64: str) -> str:
+def decrypt_api_key(ciphertext_b64: str, otp_key_b64: str) -> str | None:
     """
     Decrypts a ciphertext using One-Time Pad (OTP) via XOR.
 
@@ -506,6 +500,7 @@ def decrypt_api_key(ciphertext_b64: str, otp_key_b64: str) -> str:
     :return: Decrypted plaintext API key.
     """
 
+    plaintext_bytes = b""
     try:
         # Decode both OTP key and ciphertext from Base64
         ciphertext = base64.b64decode(ciphertext_b64)
@@ -530,7 +525,7 @@ def decrypt_api_key(ciphertext_b64: str, otp_key_b64: str) -> str:
         return None
 
 
-def coordinates_intersection(image_geometry: dict, aoi_geometry: dict) -> dict:
+def coordinates_intersection(image_geometry: dict, aoi_geometry: dict) -> dict | list:
     """
     Obtain the intersection between an image's geometry and an area of interest.
     Geometry is expected to be in GeoJSON format.
