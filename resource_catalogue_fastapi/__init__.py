@@ -13,6 +13,7 @@ from pulsar import Client as PulsarClient
 from pydantic import BaseModel, Field
 
 from .airbus_client import AirbusClient
+from .open_cosmos_client import OpenCosmosClient
 from .planet_client import PlanetClient
 from .utils import (
     OrderStatus,
@@ -58,6 +59,7 @@ ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "false"
 # S3 buckets to store user data and receive commercial data
 WORKSPACE_DATA_BUCKET = os.getenv("WORKSPACE_DATA_BUCKET", "test-bucket")
 AIRBUS_DATA_BUCKET = os.getenv("AIRBUS_DATA_BUCKET", "test-bucket")
+OPEN_COSMOS_DATA_BUCKET = os.getenv("OPEN_COSMOS_DATA_BUCKET", "test-bucket")
 
 # Root path for FastAPI
 RC_FASTAPI_ROOT_PATH = os.getenv("RC_FASTAPI_ROOT_PATH", "/api/catalogue")
@@ -70,8 +72,10 @@ producer = None
 AIRBUS_ENV = os.getenv("AIRBUS_ENV", "prod")
 airbus_client: AirbusClient = AirbusClient(AIRBUS_ENV)
 planet_client: PlanetClient = PlanetClient()
+open_cosmos_client: OpenCosmosClient = OpenCosmosClient()
 
 PLANET_COLLECTIONS = os.getenv("PLANET_COLLECTIONS", "PSScene,SkySatCollect").split(",")
+OPEN_COSMOS_COLLECTIONS = [c for c in os.getenv("OPEN_COSMOS_COLLECTIONS", "").split(",") if c]
 
 app = FastAPI(
     title="EODHP Resource Catalogue Manager",
@@ -140,6 +144,7 @@ class OrderableCatalogue(StrEnum):
 
     planet = "planet"
     airbus = "airbus"
+    open_cosmos = "open-cosmos"
 
 
 OrderablePlanetCollection = Enum("OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS})
@@ -154,9 +159,10 @@ class OrderableAirbusCollection(StrEnum):
     spot = "airbus_spot_data"
 
 
-# Combine the members of OrderableAirbusCollection and OrderablePlanetCollection
+# Combine the members of OrderableAirbusCollection, OrderablePlanetCollection, and OrderableOpenCosmosCollection
 combined_collections = {e.name: e.value for e in OrderableAirbusCollection}
 combined_collections.update({name: name for name in PLANET_COLLECTIONS})
+combined_collections.update({name: name for name in OPEN_COSMOS_COLLECTIONS})
 OrderableCollection = Enum("OrderableCollection", combined_collections)
 
 
@@ -300,7 +306,7 @@ class RadarOptions(BaseModel):
 class OrderRequest(BaseModel):
     """Request body for order endpoint"""
 
-    productBundle: ProductBundle | ProductBundleRadar
+    productBundle: ProductBundle | ProductBundleRadar | None = None
     coordinates: list | None = Field(default_factory=list)
     endUserCountry: str | None = None
     licence: LicenceOptical | LicenceRadar | None = None
@@ -682,8 +688,14 @@ def order_item(
     """
 
     licence = validate_licence(collection.value, order_request.licence)
-    product_bundle = validate_product_bundle(collection.value, order_request.productBundle)
-    radar_options = validate_radar_options(collection.value, order_request.radarOptions, product_bundle.value)
+
+    open_cosmos_collection_values = set(OPEN_COSMOS_COLLECTIONS)
+    if collection.value in open_cosmos_collection_values:
+        product_bundle = None
+        radar_options = None
+    else:
+        product_bundle = validate_product_bundle(collection.value, order_request.productBundle)
+        radar_options = validate_radar_options(collection.value, order_request.radarOptions, product_bundle.value)
     coordinates = order_request.coordinates or None
 
     tag = ""
@@ -846,11 +858,14 @@ def order_item(
     elif collection.value in optical_collections:
         adaptor_name = "airbus-optical-adaptor"
         commercial_data_bucket = AIRBUS_DATA_BUCKET
+    elif collection.value in open_cosmos_collection_values:
+        adaptor_name = "open-cosmos-adaptor"
+        commercial_data_bucket = OPEN_COSMOS_DATA_BUCKET
     else:
         adaptor_name = "planet-adaptor"
         commercial_data_bucket = WORKSPACE_DATA_BUCKET
 
-    product_bundle_value = product_bundle.value
+    product_bundle_value = product_bundle.value if product_bundle else None
     if radar_options:
         product_bundle_value = json.dumps(radar_options)
     try:
@@ -1146,6 +1161,26 @@ def quote(
             return QuoteResponse(value=price_json["value"], units=price_json["units"])
 
         return JSONResponse(status_code=404, content={"detail": "Quote not found for given acquisition ID"})
+
+    elif catalog.value == OrderableCatalogue.open_cosmos.value:
+        access_token = open_cosmos_client.generate_access_token()
+        if not access_token:
+            return JSONResponse(status_code=500, content={"detail": "Failed to generate Open Cosmos access token"})
+
+        try:
+            response_body = open_cosmos_client.get_quote(item, collection.value, workspace)
+        except NotImplementedError:
+            return JSONResponse(status_code=501, content={"detail": "Open Cosmos pricing API is not yet available"})
+        except requests.RequestException as e:
+            error_response = e.response
+            if error_response is not None:
+                return JSONResponse(
+                    status_code=error_response.status_code,
+                    content={"detail": error_response.json().get("message", str(error_response.text))},
+                )
+            return JSONResponse(status_code=500, content={"detail": str(e)})
+
+        return QuoteResponse(value=response_body["value"], units=response_body["units"])
 
     elif catalog.value == OrderableCatalogue.planet.value:
         try:
