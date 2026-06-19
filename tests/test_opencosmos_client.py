@@ -12,9 +12,11 @@ from resource_catalogue_fastapi.models import QuoteResponse
 from resource_catalogue_fastapi.opencosmos_client import (
     Credentials,
     _format_errors,
+    _request_refreshed_session,
     get_contract_info,
     get_credentials,
     opencosmos_get_quote,
+    refresh_credentials,
     val_int,
     val_str,
     val_timestamp,
@@ -26,14 +28,15 @@ def _b64(value: str) -> str:
     return base64.b64encode(value.encode("utf-8")).decode("utf-8")
 
 
-# A timestamp in milliseconds since the epoch (how Open Cosmos encodes expiry).
-_EXPIRES_MS = "1700000000000"
+# Timestamps in milliseconds since the epoch (how Open Cosmos encodes expiry).
+_PAST_MS = "1700000000000"  # 2023-11-14, used for decode assertions
+_FUTURE_MS = "4102444800000"  # 2100-01-01, safely unexpired
 
 
-def _credentials_payload() -> dict[str, str]:
+def _credentials_payload(expires_ms: str = _FUTURE_MS) -> dict[str, str]:
     return {
         "access_token": _b64("test_access_token"),
-        "expires_at": _b64(_EXPIRES_MS),
+        "expires_at": _b64(expires_ms),
         "organization_id": _b64("42"),
         "refresh_token": _b64("test_refresh_token"),
         "scope": _b64("read write"),
@@ -43,12 +46,10 @@ def _credentials_payload() -> dict[str, str]:
 
 @pytest.fixture(autouse=True)
 def clear_caches() -> Iterator[None]:
-    """get_credentials and get_contract_info are @cache decorated, so clear
-    between tests to avoid leaking results across cases."""
-    get_credentials.cache_clear()
+    """get_contract_info is @cache decorated, so clear between tests to avoid
+    leaking results across cases. (get_credentials is deliberately uncached.)"""
     get_contract_info.cache_clear()
     yield
-    get_credentials.cache_clear()
     get_contract_info.cache_clear()
 
 
@@ -66,11 +67,11 @@ def test_val_int_decodes_base64() -> None:
 
 
 def test_val_timestamp_decodes_milliseconds() -> None:
-    assert val_timestamp(_b64(_EXPIRES_MS)) == datetime.fromtimestamp(1700000000.0)
+    assert val_timestamp(_b64(_PAST_MS)) == datetime.fromtimestamp(1700000000.0)
 
 
 def test_credentials_model_decodes_all_fields() -> None:
-    credentials = Credentials(**_credentials_payload())
+    credentials = Credentials(**_credentials_payload(expires_ms=_PAST_MS))
 
     assert credentials.access_token == "test_access_token"
     assert credentials.refresh_token == "test_refresh_token"
@@ -123,12 +124,94 @@ def test_get_credentials_reads_secret_from_workspace_namespace(mock_k8s_credenti
     )
 
 
-def test_get_credentials_is_cached_per_workspace(mock_k8s_credentials: Any) -> None:
+def test_get_credentials_reads_secret_every_call(mock_k8s_credentials: Any) -> None:
+    # No caching: the secret is read fresh each time so externally-refreshed
+    # credentials are picked up immediately.
     get_credentials("workspace-a")
     get_credentials("workspace-a")
 
-    # Second call should be served from the cache, not hit Kubernetes again.
-    assert mock_k8s_credentials.read_namespaced_secret.call_count == 1
+    assert mock_k8s_credentials.read_namespaced_secret.call_count == 2
+
+
+def test_get_credentials_returns_unexpired_token_without_refreshing(mock_k8s_credentials: Any) -> None:
+    with mock.patch("resource_catalogue_fastapi.opencosmos_client.refresh_credentials") as mock_refresh:
+        credentials = get_credentials("workspace-a")
+
+    assert credentials.access_token == "test_access_token"
+    mock_refresh.assert_not_called()
+
+
+def test_get_credentials_refreshes_when_expired() -> None:
+    refreshed = mock.Mock(access_token="fresh_access_token")
+    with (
+        mock.patch("resource_catalogue_fastapi.opencosmos_client.config.load_incluster_config"),
+        mock.patch("resource_catalogue_fastapi.opencosmos_client.client.CoreV1Api") as mock_core_v1_api,
+        mock.patch(
+            "resource_catalogue_fastapi.opencosmos_client.refresh_credentials",
+            return_value=refreshed,
+        ) as mock_refresh,
+    ):
+        mock_instance = mock.Mock()
+        mock_instance.read_namespaced_secret.return_value = mock.Mock(
+            data=_credentials_payload(expires_ms=_PAST_MS)
+        )
+        mock_core_v1_api.return_value = mock_instance
+
+        credentials = get_credentials("workspace-a")
+
+    assert credentials is refreshed
+    mock_refresh.assert_called_once()
+
+
+def test_request_refreshed_session_not_yet_implemented() -> None:
+    # Step 4 (minting a new token from Open Cosmos) is still stubbed.
+    credentials = Credentials(**_credentials_payload())
+    with pytest.raises(NotImplementedError):
+        _request_refreshed_session(credentials)
+
+
+def test_refresh_credentials_posts_session_to_workspace_services() -> None:
+    credentials = Credentials(**_credentials_payload())
+    new_session = {
+        "access_token": "fresh_access_token",
+        "refresh_token": "fresh_refresh_token",
+        "expires_at": 4102444800000,
+        "scope": "read write",
+        "token_type": "Bearer",
+    }
+
+    with (
+        mock.patch(
+            "resource_catalogue_fastapi.opencosmos_client._request_refreshed_session",
+            return_value=new_session,
+        ),
+        mock.patch("resource_catalogue_fastapi.opencosmos_client.requests.post") as mock_post,
+        mock.patch(
+            "resource_catalogue_fastapi.opencosmos_client.read_credentials"
+        ) as mock_read_credentials,
+    ):
+        mock_post.return_value = mock.Mock(spec=Response, raise_for_status=mock.Mock(return_value=None))
+        mock_read_credentials.return_value = mock.Mock(access_token="fresh_access_token")
+
+        result = refresh_credentials("workspace-a", credentials)
+
+    # POSTs the refreshed session to the workspace-services session endpoint.
+    url = mock_post.call_args.args[0] if mock_post.call_args.args else mock_post.call_args.kwargs["url"]
+    assert url.endswith("/workspaces/workspace-a/open-cosmos/session")
+
+    sent = mock_post.call_args.kwargs["json"]
+    assert sent == {
+        "accessToken": "fresh_access_token",
+        "refreshToken": "fresh_refresh_token",
+        "expiresAt": 4102444800000,
+        "scope": "read write",
+        "tokenType": "Bearer",
+        "organization_id": 42,
+    }
+
+    # Returns the canonical credentials re-read from the (now updated) secret.
+    assert result is mock_read_credentials.return_value
+    mock_read_credentials.assert_called_once_with("workspace-a")
 
 
 # ---------------------------------------------------------------------------
