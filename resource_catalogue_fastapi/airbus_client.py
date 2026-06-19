@@ -7,8 +7,7 @@ from typing import Any
 import requests
 from fastapi import HTTPException
 from kubernetes import client, config
-
-from .utils import get_api_key
+from utils import get_api_key
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
