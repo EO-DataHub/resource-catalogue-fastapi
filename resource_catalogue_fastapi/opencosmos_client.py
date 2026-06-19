@@ -1,4 +1,3 @@
-import json
 import logging
 from base64 import b64decode
 from datetime import datetime
@@ -7,8 +6,9 @@ from typing import Annotated
 
 import requests
 from kubernetes import client, config
-from .models import QuoteResponse
 from pydantic import BaseModel, BeforeValidator
+
+from .models import QuoteResponse
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +50,15 @@ def get_credentials(workspace: str) -> Credentials:
     v1 = client.CoreV1Api()
     namespace = f"ws-{workspace}"
 
-    # Retrieve the credentials from Kubernetes Secrets
+    # Retrieve the credentials from Kubernetes Secrets. The client deserialises
+    # secret .data to a dict[str, str] of base64 values; the Credentials model's
+    # BeforeValidators decode each field, so pass the dict straight through.
     logging.info("Fetching credentials from Kubernetes...")
     r = v1.read_namespaced_secret(f"oauth-{provider}", namespace)
-    credentials = json.loads(r.data)
 
     # TODO: Check expiry and refresh if necessary.
 
-    return Credentials(**credentials)
+    return Credentials(**r.data)
 
 
 @cache
