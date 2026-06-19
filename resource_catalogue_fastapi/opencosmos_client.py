@@ -7,7 +7,7 @@ from typing import Annotated
 
 import requests
 from kubernetes import client, config
-from models import QuoteResponse
+from .models import QuoteResponse
 from pydantic import BaseModel, BeforeValidator
 
 logger = logging.getLogger(__name__)

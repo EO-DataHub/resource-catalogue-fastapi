@@ -6,11 +6,11 @@ from functools import cache
 from typing import Annotated, Any
 
 import requests
-from airbus_client import AirbusClient
+from .airbus_client import AirbusClient
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from models import (
+from .models import (
     ItemRequest,
     LicenceOptical,
     LicenceRadar,
@@ -27,10 +27,10 @@ from models import (
     RadarOptions,
     product_bundle_no_aoi,
 )
-from opencosmos_client import opencosmos_get_quote
-from planet_client import PlanetClient
+from .opencosmos_client import opencosmos_get_quote
+from .planet_client import PlanetClient
 from pulsar import Client as PulsarClient
-from utils import (
+from .utils import (
     OrderStatus,
     check_user_can_access_a_workspace,
     check_user_can_access_requested_workspace,
