@@ -83,8 +83,8 @@ PULSAR_URL = os.environ.get("PULSAR_URL", "pulsar://pulsar-broker.pulsar:6650")
 pulsar_client = PulsarClient(PULSAR_URL)
 
 AIRBUS_ENV = os.getenv("AIRBUS_ENV", "prod")
-airbus_client: AirbusClient = AirbusClient(AIRBUS_ENV)
-planet_client: PlanetClient = PlanetClient()
+_airbus_client: AirbusClient = AirbusClient(AIRBUS_ENV)
+_planet_client: PlanetClient = PlanetClient()
 
 
 app = FastAPI(
@@ -288,7 +288,7 @@ def upload_nested_files(
 def health_check() -> JSONResponse:
     """Health check endpoint to verify Airbus client connectivity"""
     try:
-        access_token = airbus_client.generate_access_token()
+        access_token = _airbus_client.generate_access_token()
         if isinstance(access_token, str):
             return JSONResponse(content={"status": "healthy"}, status_code=200)
         else:
@@ -561,7 +561,7 @@ def order_item(
 
     # if airbus, validate the user has the correct contract_id too before ordering
     if catalog.value == OrderableCatalogue.airbus.value:
-        _, err = airbus_client.get_contract_id(workspace, collection.value)
+        _, err = _airbus_client.get_contract_id(workspace, collection.value)
         if err is not None:
             return JSONResponse(
                 status_code=403,
@@ -639,7 +639,7 @@ def order_item(
     if collection.value in optical_collections:
         end_users = []
         if country_code := order_request.endUserCountry:
-            airbus_client.validate_country_code(country_code)
+            _airbus_client.validate_country_code(country_code)
             end_users = [{"endUserName": username, "country": country_code}]
     if collection.value == OrderableAirbusCollection.pneo.value and not end_users:
         raise HTTPException(
@@ -806,7 +806,7 @@ def quote(
     if catalog.value == OrderableCatalogue.airbus.value:
         # Get the contract ID. If contract_id is None, it is a SAR collection.
         # If err is not None, the user does not have access to the collection
-        contract_id, err = airbus_client.get_contract_id(workspace, collection.value)
+        contract_id, err = _airbus_client.get_contract_id(workspace, collection.value)
 
         if err is not None:
             return JSONResponse(
@@ -928,14 +928,14 @@ def quote(
                 status_code=404,
                 content={"detail": f"Collection {collection.value} not recognised as an Airbus collection"},
             )
-        access_token = airbus_client.generate_access_token(workspace)
+        access_token = _airbus_client.generate_access_token(workspace)
         if not access_token:
             return JSONResponse(status_code=500, content={"detail": "Failed to generate access token"})
 
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
         try:
-            response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
+            response_body = _airbus_client.get_quote_from_airbus(url, request_body, headers)
         except requests.RequestException as e:
             error_response = e.response
             if error_response is not None:
@@ -974,7 +974,7 @@ def quote(
                 coordinates = []
                 message = "No AOI clipping available for this collection and product bundle combination"
 
-            area = planet_client.get_area_estimate(item, collection.value, coordinates or [])
+            area = _planet_client.get_area_estimate(item, collection.value, coordinates or [])
 
             if collection.value == "SkySatScene" and area < 3:
                 # SkySatScene has a minimum order size of 3 km2
@@ -1009,7 +1009,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
         raise HTTPException(status_code=404, detail=f"External {asset_name} link not found in item")
     logger.info(f"Fetching {asset_name} from {asset_link}")
 
-    access_token = airbus_client.generate_access_token()
+    access_token = _airbus_client.generate_access_token()
     headers = {"Authorization": f"Bearer {access_token}"}
     asset_response = requests.get(asset_link, headers=headers)
     asset_response.raise_for_status()
