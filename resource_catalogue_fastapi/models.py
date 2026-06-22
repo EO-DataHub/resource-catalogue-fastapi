@@ -31,7 +31,7 @@ class OrderableCatalogue(StrEnum):
 
     planet = "planet"
     airbus = "airbus"
-    open_cosmos = "opencosmos"
+    open_cosmos = "open-cosmos"
 
 
 OrderablePlanetCollection = Enum("OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS})

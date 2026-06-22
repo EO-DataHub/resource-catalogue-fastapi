@@ -46,16 +46,16 @@ class ContractInfo(BaseModel):
 # token that dies mid-request.
 _EXPIRY_MARGIN = timedelta(minutes=5)
 
-# Base URL of the workspace-services API that owns the oauth-opencosmos secret.
+# Base URL of the workspace-services API that owns the oauth-open-cosmos secret.
 # It runs alongside this API, so this is expected to be set at runtime; the
 # placeholder default keeps things importable until the real address is wired in.
 WORKSPACE_SERVICES_URL = os.getenv("WORKSPACE_SERVICES_URL", "http://workspace-services-placeholder/api")
 
 
-# kubectl -n ws-opencosmos-order-testing get secret oauth-opencosmos
+# kubectl -n ws-open-cosmos-order-testing get secret oauth-open-cosmos
 def read_credentials(workspace: str) -> Credentials:
     """Read the current OAuth credentials from the workspace's Kubernetes secret."""
-    provider = "opencosmos"
+    provider = "open-cosmos"
 
     # Initialize Kubernetes API client
     config.load_incluster_config()
@@ -102,7 +102,7 @@ def refresh_credentials(workspace: str, credentials: Credentials) -> Credentials
 
     1. Exchange the refresh token for a new session with Open Cosmos.
     2. POST the new session to workspace-services, which writes it back to the
-       workspace's Kubernetes secret (oauth-opencosmos).
+       workspace's Kubernetes secret (oauth-open-cosmos).
     3. Re-read and return the now-current credentials from the secret.
     """
     session = _request_refreshed_session(credentials)
@@ -162,7 +162,7 @@ def _format_errors(errors: list[dict[str, str]]) -> str:
     return "\n".join(error["message"] for error in errors)
 
 
-def opencosmos_get_quote(workspace: str, collection_id: str, item_id: str) -> QuoteResponse:
+def open_cosmos_get_quote(workspace: str, collection_id: str, item_id: str) -> QuoteResponse:
     credentials = get_credentials(workspace)
     contract_info = get_contract_info(workspace)
 

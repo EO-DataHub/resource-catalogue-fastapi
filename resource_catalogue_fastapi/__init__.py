@@ -29,7 +29,7 @@ from .models import (
     RadarOptions,
     product_bundle_no_aoi,
 )
-from .opencosmos_client import opencosmos_get_quote
+from .open_cosmos_client import open_cosmos_get_quote
 from .planet_client import PlanetClient
 from .utils import (
     OrderStatus,
@@ -990,7 +990,7 @@ def quote(
             return JSONResponse(content={"message": str(e)}, status_code=400)
 
     elif catalog.value == OrderableCatalogue.open_cosmos.value:
-        return opencosmos_get_quote(workspace, collection.value, item)
+        return open_cosmos_get_quote(workspace, collection.value, item)
     else:
         return JSONResponse(
             content={f"message:{catalog.value} not recognised"},

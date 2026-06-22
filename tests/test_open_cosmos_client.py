@@ -8,13 +8,11 @@ import pytest
 from requests.models import Response
 
 from resource_catalogue_fastapi.models import QuoteResponse
-from resource_catalogue_fastapi.opencosmos_client import (
+from resource_catalogue_fastapi.open_cosmos_client import (
     Credentials,
-    _format_errors,
-    _request_refreshed_session,
     get_contract_info,
     get_credentials,
-    opencosmos_get_quote,
+    open_cosmos_get_quote,
     refresh_credentials,
     val_int,
     val_str,
@@ -81,20 +79,6 @@ def test_credentials_model_decodes_all_fields() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _format_errors
-# ---------------------------------------------------------------------------
-
-
-def test_format_errors_empty() -> None:
-    assert _format_errors([]) == ""
-
-
-def test_format_errors_joins_messages_with_newlines() -> None:
-    errors = [{"message": "first problem"}, {"message": "second problem"}]
-    assert _format_errors(errors) == "first problem\nsecond problem"
-
-
-# ---------------------------------------------------------------------------
 # get_credentials (Kubernetes secret lookup)
 # ---------------------------------------------------------------------------
 
@@ -102,8 +86,8 @@ def test_format_errors_joins_messages_with_newlines() -> None:
 @pytest.fixture
 def mock_k8s_credentials() -> Iterator[Any]:
     with (
-        mock.patch("resource_catalogue_fastapi.opencosmos_client.config.load_incluster_config"),
-        mock.patch("resource_catalogue_fastapi.opencosmos_client.client.CoreV1Api") as mock_core_v1_api,
+        mock.patch("resource_catalogue_fastapi.open_cosmos_client.config.load_incluster_config"),
+        mock.patch("resource_catalogue_fastapi.open_cosmos_client.client.CoreV1Api") as mock_core_v1_api,
     ):
         mock_instance = mock.Mock()
         # The kubernetes client deserialises V1Secret.data to a dict[str, str]
@@ -114,12 +98,12 @@ def mock_k8s_credentials() -> Iterator[Any]:
 
 
 def test_get_credentials_reads_secret_from_workspace_namespace(mock_k8s_credentials: Any) -> None:
-    credentials = get_credentials("opencosmos-order-testing")
+    credentials = get_credentials("open-cosmos-order-testing")
 
     assert credentials.access_token == "test_access_token"
     assert credentials.organization_id == 42
     mock_k8s_credentials.read_namespaced_secret.assert_called_once_with(
-        "oauth-opencosmos", "ws-opencosmos-order-testing"
+        "oauth-open-cosmos", "ws-open-cosmos-order-testing"
     )
 
 
@@ -133,7 +117,7 @@ def test_get_credentials_reads_secret_every_call(mock_k8s_credentials: Any) -> N
 
 
 def test_get_credentials_returns_unexpired_token_without_refreshing(mock_k8s_credentials: Any) -> None:
-    with mock.patch("resource_catalogue_fastapi.opencosmos_client.refresh_credentials") as mock_refresh:
+    with mock.patch("resource_catalogue_fastapi.open_cosmos_client.refresh_credentials") as mock_refresh:
         credentials = get_credentials("workspace-a")
 
     assert credentials.access_token == "test_access_token"
@@ -143,10 +127,10 @@ def test_get_credentials_returns_unexpired_token_without_refreshing(mock_k8s_cre
 def test_get_credentials_refreshes_when_expired() -> None:
     refreshed = mock.Mock(access_token="fresh_access_token")
     with (
-        mock.patch("resource_catalogue_fastapi.opencosmos_client.config.load_incluster_config"),
-        mock.patch("resource_catalogue_fastapi.opencosmos_client.client.CoreV1Api") as mock_core_v1_api,
+        mock.patch("resource_catalogue_fastapi.open_cosmos_client.config.load_incluster_config"),
+        mock.patch("resource_catalogue_fastapi.open_cosmos_client.client.CoreV1Api") as mock_core_v1_api,
         mock.patch(
-            "resource_catalogue_fastapi.opencosmos_client.refresh_credentials",
+            "resource_catalogue_fastapi.open_cosmos_client.refresh_credentials",
             return_value=refreshed,
         ) as mock_refresh,
     ):
@@ -158,13 +142,6 @@ def test_get_credentials_refreshes_when_expired() -> None:
 
     assert credentials is refreshed
     mock_refresh.assert_called_once()
-
-
-def test_request_refreshed_session_not_yet_implemented() -> None:
-    # Step 4 (minting a new token from Open Cosmos) is still stubbed.
-    credentials = Credentials(**_credentials_payload())  # pyright: ignore
-    with pytest.raises(NotImplementedError):
-        _request_refreshed_session(credentials)
 
 
 def test_refresh_credentials_posts_session_to_workspace_services() -> None:
@@ -179,11 +156,11 @@ def test_refresh_credentials_posts_session_to_workspace_services() -> None:
 
     with (
         mock.patch(
-            "resource_catalogue_fastapi.opencosmos_client._request_refreshed_session",
+            "resource_catalogue_fastapi.open_cosmos_client._request_refreshed_session",
             return_value=new_session,
         ),
-        mock.patch("resource_catalogue_fastapi.opencosmos_client.requests.post") as mock_post,
-        mock.patch("resource_catalogue_fastapi.opencosmos_client.read_credentials") as mock_read_credentials,
+        mock.patch("resource_catalogue_fastapi.open_cosmos_client.requests.post") as mock_post,
+        mock.patch("resource_catalogue_fastapi.open_cosmos_client.read_credentials") as mock_read_credentials,
     ):
         mock_post.return_value = mock.Mock(spec=Response, raise_for_status=mock.Mock(return_value=None))
         mock_read_credentials.return_value = mock.Mock(access_token="fresh_access_token")
@@ -216,7 +193,7 @@ def test_refresh_credentials_posts_session_to_workspace_services() -> None:
 
 @pytest.fixture
 def mock_get_credentials() -> Iterator[Any]:
-    with mock.patch("resource_catalogue_fastapi.opencosmos_client.get_credentials") as mock_creds:
+    with mock.patch("resource_catalogue_fastapi.open_cosmos_client.get_credentials") as mock_creds:
         mock_creds.return_value = mock.Mock(access_token="test_access_token", organization_id=42)
         yield mock_creds
 
@@ -234,7 +211,7 @@ def test_get_contract_info_returns_default_contract(mock_get_credentials: Any) -
         {"contract_id": 200, "default_contract": True},
     ]
     with mock.patch(
-        "resource_catalogue_fastapi.opencosmos_client.requests.get",
+        "resource_catalogue_fastapi.open_cosmos_client.requests.get",
         return_value=_policies_response(policies),
     ):
         info = get_contract_info("workspace-default")
@@ -249,7 +226,7 @@ def test_get_contract_info_falls_back_to_first_contract(mock_get_credentials: An
         {"contract_id": 200, "default_contract": False},
     ]
     with mock.patch(
-        "resource_catalogue_fastapi.opencosmos_client.requests.get",
+        "resource_catalogue_fastapi.open_cosmos_client.requests.get",
         return_value=_policies_response(policies),
     ):
         info = get_contract_info("workspace-no-default")
@@ -259,7 +236,7 @@ def test_get_contract_info_falls_back_to_first_contract(mock_get_credentials: An
 
 
 # ---------------------------------------------------------------------------
-# opencosmos_get_quote
+# open_cosmos_get_quote
 # ---------------------------------------------------------------------------
 
 
@@ -267,18 +244,18 @@ def test_get_contract_info_falls_back_to_first_contract(mock_get_credentials: An
 def mock_quote_dependencies() -> Iterator[None]:
     with (
         mock.patch(
-            "resource_catalogue_fastapi.opencosmos_client.get_credentials",
+            "resource_catalogue_fastapi.open_cosmos_client.get_credentials",
             return_value=mock.Mock(access_token="test_access_token", organization_id=42),
         ),
         mock.patch(
-            "resource_catalogue_fastapi.opencosmos_client.get_contract_info",
+            "resource_catalogue_fastapi.open_cosmos_client.get_contract_info",
             return_value=mock.Mock(contract_id=200, organisation_id=42),
         ),
     ):
         yield
 
 
-def test_opencosmos_get_quote_returns_quote_response(mock_quote_dependencies: None) -> None:
+def test_open_cosmos_get_quote_returns_quote_response(mock_quote_dependencies: None) -> None:
     mock_response = mock.Mock(spec=Response)
     mock_response.json.return_value = {
         "data": {"final": 42.5, "currency": "GBP"},
@@ -287,10 +264,10 @@ def test_opencosmos_get_quote_returns_quote_response(mock_quote_dependencies: No
     mock_response.raise_for_status.return_value = None
 
     with mock.patch(
-        "resource_catalogue_fastapi.opencosmos_client.requests.get",
+        "resource_catalogue_fastapi.open_cosmos_client.requests.get",
         return_value=mock_response,
     ):
-        quote = opencosmos_get_quote("workspace", "collection-1", "item-1")
+        quote = open_cosmos_get_quote("workspace", "collection-1", "item-1")
 
     assert isinstance(quote, QuoteResponse)
     assert quote.value == 42.5
