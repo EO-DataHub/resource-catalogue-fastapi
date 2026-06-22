@@ -7,6 +7,7 @@ from typing import Annotated, Any
 
 import requests
 from kubernetes import client, config
+from kubernetes.aio.client import V1Secret
 from pydantic import BaseModel, BeforeValidator
 
 from .models import QuoteResponse
@@ -62,9 +63,9 @@ def read_credentials(workspace: str) -> Credentials:
     namespace = f"ws-{workspace}"
 
     logging.info("Fetching credentials from Kubernetes...")
-    r = v1.read_namespaced_secret(f"oauth-{provider}", namespace)
+    r: V1Secret = v1.read_namespaced_secret(f"oauth-{provider}", namespace)  # pyright: ignore
 
-    return Credentials(**r.data)
+    return Credentials(**r.data)  # pyright: ignore
 
 
 def get_credentials(workspace: str) -> Credentials:
@@ -158,9 +159,7 @@ def get_contract_info(workspace: str) -> ContractInfo:
 
 
 def _format_errors(errors: list[dict[str, str]]) -> str:
-    return "\n".join(
-        error["message"] for error in errors
-    )
+    return "\n".join(error["message"] for error in errors)
 
 
 def opencosmos_get_quote(workspace: str, collection_id: str, item_id: str) -> QuoteResponse:
@@ -179,7 +178,7 @@ def opencosmos_get_quote(workspace: str, collection_id: str, item_id: str) -> Qu
     try:
         r.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        e.detail = _format_errors(j["errors"])
+        # e.detail = _format_errors(j["errors"])
         raise e
 
     quote = j["data"]

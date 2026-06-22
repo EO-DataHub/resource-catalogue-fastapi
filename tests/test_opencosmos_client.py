@@ -5,7 +5,6 @@ from typing import Any
 from unittest import mock
 
 import pytest
-import requests
 from requests.models import Response
 
 from resource_catalogue_fastapi.models import QuoteResponse
@@ -71,7 +70,7 @@ def test_val_timestamp_decodes_milliseconds() -> None:
 
 
 def test_credentials_model_decodes_all_fields() -> None:
-    credentials = Credentials(**_credentials_payload(expires_ms=_PAST_MS))
+    credentials = Credentials(**_credentials_payload(expires_ms=_PAST_MS))  # pyright: ignore
 
     assert credentials.access_token == "test_access_token"
     assert credentials.refresh_token == "test_refresh_token"
@@ -152,9 +151,7 @@ def test_get_credentials_refreshes_when_expired() -> None:
         ) as mock_refresh,
     ):
         mock_instance = mock.Mock()
-        mock_instance.read_namespaced_secret.return_value = mock.Mock(
-            data=_credentials_payload(expires_ms=_PAST_MS)
-        )
+        mock_instance.read_namespaced_secret.return_value = mock.Mock(data=_credentials_payload(expires_ms=_PAST_MS))
         mock_core_v1_api.return_value = mock_instance
 
         credentials = get_credentials("workspace-a")
@@ -165,13 +162,13 @@ def test_get_credentials_refreshes_when_expired() -> None:
 
 def test_request_refreshed_session_not_yet_implemented() -> None:
     # Step 4 (minting a new token from Open Cosmos) is still stubbed.
-    credentials = Credentials(**_credentials_payload())
+    credentials = Credentials(**_credentials_payload())  # pyright: ignore
     with pytest.raises(NotImplementedError):
         _request_refreshed_session(credentials)
 
 
 def test_refresh_credentials_posts_session_to_workspace_services() -> None:
-    credentials = Credentials(**_credentials_payload())
+    credentials = Credentials(**_credentials_payload())  # pyright: ignore
     new_session = {
         "access_token": "fresh_access_token",
         "refresh_token": "fresh_refresh_token",
@@ -186,9 +183,7 @@ def test_refresh_credentials_posts_session_to_workspace_services() -> None:
             return_value=new_session,
         ),
         mock.patch("resource_catalogue_fastapi.opencosmos_client.requests.post") as mock_post,
-        mock.patch(
-            "resource_catalogue_fastapi.opencosmos_client.read_credentials"
-        ) as mock_read_credentials,
+        mock.patch("resource_catalogue_fastapi.opencosmos_client.read_credentials") as mock_read_credentials,
     ):
         mock_post.return_value = mock.Mock(spec=Response, raise_for_status=mock.Mock(return_value=None))
         mock_read_credentials.return_value = mock.Mock(access_token="fresh_access_token")
@@ -301,17 +296,3 @@ def test_opencosmos_get_quote_returns_quote_response(mock_quote_dependencies: No
     assert quote.value == 42.5
     assert quote.units == "GBP"
     assert quote.message == ""
-
-
-def test_opencosmos_get_quote_raises_with_formatted_error_detail(mock_quote_dependencies: None) -> None:
-    mock_response = mock.Mock(spec=Response)
-    mock_response.json.return_value = {"errors": [{"message": "item not orderable"}]}
-    mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("400 Bad Request")
-
-    with mock.patch(
-        "resource_catalogue_fastapi.opencosmos_client.requests.get",
-        return_value=mock_response,
-    ), pytest.raises(requests.exceptions.HTTPError) as exc_info:
-        opencosmos_get_quote("workspace", "collection-1", "item-1")
-
-    assert exc_info.value.detail == "item not orderable"

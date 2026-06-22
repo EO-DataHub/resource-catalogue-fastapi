@@ -175,7 +175,6 @@ class Projection(StrEnum):
         return mappings[self.value]
 
 
-
 class RadarOptions(BaseModel):
     """Radar options for Airbus SAR data"""
 
