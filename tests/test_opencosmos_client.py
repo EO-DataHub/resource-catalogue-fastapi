@@ -311,8 +311,7 @@ def test_opencosmos_get_quote_raises_with_formatted_error_detail(mock_quote_depe
     with mock.patch(
         "resource_catalogue_fastapi.opencosmos_client.requests.get",
         return_value=mock_response,
-    ):
-        with pytest.raises(requests.exceptions.HTTPError) as exc_info:
-            opencosmos_get_quote("workspace", "collection-1", "item-1")
+    ), pytest.raises(requests.exceptions.HTTPError) as exc_info:
+        opencosmos_get_quote("workspace", "collection-1", "item-1")
 
     assert exc_info.value.detail == "item not orderable"

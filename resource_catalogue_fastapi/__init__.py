@@ -6,10 +6,12 @@ from functools import cache
 from typing import Annotated, Any
 
 import requests
-from .airbus_client import AirbusClient
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pulsar import Client as PulsarClient
+
+from .airbus_client import AirbusClient
 from .models import (
     ItemRequest,
     LicenceOptical,
@@ -29,7 +31,6 @@ from .models import (
 )
 from .opencosmos_client import opencosmos_get_quote
 from .planet_client import PlanetClient
-from pulsar import Client as PulsarClient
 from .utils import (
     OrderStatus,
     check_user_can_access_a_workspace,
