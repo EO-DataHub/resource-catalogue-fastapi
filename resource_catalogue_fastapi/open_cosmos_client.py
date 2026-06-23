@@ -6,6 +6,7 @@ from functools import cache
 from typing import Annotated, Any
 
 import requests
+from fastapi import HTTPException
 from kubernetes import client, config
 from kubernetes.aio.client import V1Secret
 from pydantic import BaseModel, BeforeValidator
@@ -57,15 +58,18 @@ def read_credentials(workspace: str) -> Credentials:
     """Read the current OAuth credentials from the workspace's Kubernetes secret."""
     provider = "open-cosmos"
 
-    # Initialize Kubernetes API client
-    config.load_incluster_config()
-    v1 = client.CoreV1Api()
-    namespace = f"ws-{workspace}"
+    try:
+        # Initialize Kubernetes API client
+        config.load_incluster_config()
+        v1 = client.CoreV1Api()
+        namespace = f"ws-{workspace}"
 
-    logging.info("Fetching credentials from Kubernetes...")
-    r: V1Secret = v1.read_namespaced_secret(f"oauth-{provider}", namespace)  # pyright: ignore
+        logging.info("Fetching credentials from Kubernetes...")
+        r: V1Secret = v1.read_namespaced_secret(f"oauth-{provider}", namespace)  # pyright: ignore
 
-    return Credentials(**r.data)  # pyright: ignore
+        return Credentials(**r.data)  # pyright: ignore
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
 
 
 def get_credentials(workspace: str) -> Credentials:
@@ -126,7 +130,11 @@ def refresh_credentials(workspace: str, credentials: Credentials) -> Credentials
         json=payload,
         headers=headers,
     )
-    r.raise_for_status()
+
+    try:
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        raise HTTPException(status_code=401) from e
 
     return read_credentials(workspace)
 
@@ -147,6 +155,9 @@ def get_contract_info(workspace: str) -> ContractInfo:
     )
     r.raise_for_status()
     policies = r.json()["data"]
+
+    if len(policies) == 0:
+        raise HTTPException(status_code=404, detail="No policies found for organization")
 
     for policy in policies:
         if policy["default_contract"]:
@@ -173,14 +184,14 @@ def open_cosmos_get_quote(workspace: str, collection_id: str, item_id: str) -> Q
         headers=headers,
     )
 
-    j = r.json()
-
     try:
         r.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        # e.detail = _format_errors(j["errors"])
-        raise e
+        # It seems all responses from Open Cosmos have a JSON body with an "errors" field. But we can't be sure.
+        # detail = _format_errors(j["errors"])
+        raise HTTPException(status_code=404, detail=r.text) from e
 
+    j = r.json()
     quote = j["data"]
 
     return QuoteResponse(value=quote["final"], units=quote["currency"], message=_format_errors(j["errors"]))

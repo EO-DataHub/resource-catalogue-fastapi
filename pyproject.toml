@@ -51,7 +51,6 @@ dependencies = [
     "pyjwt",
     "pyyaml",
     "boto3",
-    "pulsar-client",
     "pyproj",
     "shapely",
     "kubernetes",
