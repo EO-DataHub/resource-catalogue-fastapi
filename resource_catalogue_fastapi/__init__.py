@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import os
-from enum import Enum, StrEnum
+from functools import cache
 from typing import Annotated, Any
 
 import requests
@@ -10,9 +10,26 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pulsar import Client as PulsarClient
-from pydantic import BaseModel, Field
 
 from .airbus_client import AirbusClient
+from .models import (
+    ItemRequest,
+    LicenceOptical,
+    LicenceRadar,
+    OrderableAirbusCollection,
+    OrderableCatalogue,
+    OrderableCollection,
+    OrderableOpenCosmosCollection,
+    OrderRequest,
+    ParentCatalogue,
+    ProductBundle,
+    ProductBundleRadar,
+    QuoteRequest,
+    QuoteResponse,
+    RadarOptions,
+    product_bundle_no_aoi,
+)
+from .open_cosmos_client import open_cosmos_get_quote
 from .planet_client import PlanetClient
 from .utils import (
     OrderStatus,
@@ -65,13 +82,11 @@ RC_FASTAPI_ROOT_PATH = os.getenv("RC_FASTAPI_ROOT_PATH", "/api/catalogue")
 # Pulsar client setup
 PULSAR_URL = os.environ.get("PULSAR_URL", "pulsar://pulsar-broker.pulsar:6650")
 pulsar_client = PulsarClient(PULSAR_URL)
-producer = None
 
 AIRBUS_ENV = os.getenv("AIRBUS_ENV", "prod")
-airbus_client: AirbusClient = AirbusClient(AIRBUS_ENV)
-planet_client: PlanetClient = PlanetClient()
+_airbus_client: AirbusClient = AirbusClient(AIRBUS_ENV)
+_planet_client: PlanetClient = PlanetClient()
 
-PLANET_COLLECTIONS = os.getenv("PLANET_COLLECTIONS", "PSScene,SkySatCollect").split(",")
 
 app = FastAPI(
     title="EODHP Resource Catalogue Manager",
@@ -93,12 +108,10 @@ app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
 
 # Dependency function to get or create the producer
+@cache
 def get_producer() -> Any:
     """Get or create a producer for the Pulsar client"""
-    global producer
-    if producer is None:
-        producer = pulsar_client.create_producer(topic="transformed", producer_name="resource_catalogue_fastapi")
-    return producer
+    return pulsar_client.create_producer(topic="transformed", producer_name="resource_catalogue_fastapi")
 
 
 async def workspace_access_dependency(
@@ -126,201 +139,6 @@ def ensure_user_logged_in(request: Request) -> None:
 
         if not username:
             raise HTTPException(status_code=401, detail="Unauthorised")
-
-
-class ParentCatalogue(StrEnum):
-    """Parent catalogue for commercial data in the resource catalogue"""
-
-    supported_datasets = "supported-datasets"
-    commercial = "commercial"
-
-
-class OrderableCatalogue(StrEnum):
-    """Catalogues for ordering commercial data"""
-
-    planet = "planet"
-    airbus = "airbus"
-
-
-OrderablePlanetCollection = Enum("OrderablePlanetCollection", {name: name for name in PLANET_COLLECTIONS})
-
-
-class OrderableAirbusCollection(StrEnum):
-    """Collections for ordering Airbus commercial data"""
-
-    sar = "airbus_sar_data"
-    pneo = "airbus_pneo_data"
-    phr = "airbus_phr_data"
-    spot = "airbus_spot_data"
-
-
-# Combine the members of OrderableAirbusCollection and OrderablePlanetCollection
-combined_collections = {e.name: e.value for e in OrderableAirbusCollection}
-combined_collections.update({name: name for name in PLANET_COLLECTIONS})
-OrderableCollection = Enum("OrderableCollection", combined_collections)
-
-
-class ItemRequest(BaseModel):
-    """Request body for create, update and delete item endpoints"""
-
-    url: str
-    extra_data: dict[str, Any] | None = Field(default_factory=dict)
-
-
-class ProductBundle(StrEnum):
-    """Product bundles for Planet and Airbus optical data"""
-
-    general_use = "General Use"
-    visual = "Visual"
-    basic = "Basic"
-    analytic = "Analytic"
-
-
-product_bundle_no_aoi = [("SkySatCollect", ProductBundle.analytic)]
-
-
-class ProductBundleRadar(StrEnum):
-    """Product bundles for Airbus SAR data"""
-
-    SSC = "SSC"
-    MGD = "MGD"
-    GEC = "GEC"
-    EEC = "EEC"
-
-
-class LicenceRadar(StrEnum):
-    """Licence types for Airbus SAR data"""
-
-    SINGLE = "Single User Licence"
-    MULTI_2_5 = "Multi User (2 - 5) Licence"
-    MULTI_6_30 = "Multi User (6 - 30) Licence"
-
-    def airbus_value(self, collection: Enum) -> str:
-        """Map the licence type to the Airbus API value"""
-        # collection not used in this mapping, but kept for consistency
-        mappings = {
-            "Single User Licence": "Single User License",
-            "Multi User (2 - 5) Licence": "Multi User (2 - 5) License",
-            "Multi User (6 - 30) Licence": "Multi User (6 - 30) License",
-        }
-        return mappings[self.value]
-
-
-class LicenceOptical(StrEnum):
-    """Licence types for Airbus optical data"""
-
-    STANDARD = "Standard"
-    BACKGROUND = "Background Layer"
-    STANDARD_BACKGROUND = "Standard + Background Layer"
-    ACADEMIC = "Academic"
-    MEDIA = "Media Licence"
-    STANDARD_MULTI_2_5 = "Standard Multi End-Users (2-5)"
-    STANDARD_MULTI_6_10 = "Standard Multi End-Users (6-10)"
-    STANDARD_MULTI_11_30 = "Standard Multi End-Users (11-30)"
-    STANDARD_MULTI_30 = "Standard Multi End-Users (>30)"
-
-    def airbus_value(self, collection: Enum) -> str:
-        """Map the licence type to the Airbus API value"""
-        mappings = {
-            "Standard": "standard",
-            "Background Layer": "background_layer",
-            "Standard + Background Layer": "stand_background_layer",
-            "Academic": "educ",
-            "Media Licence": "media",
-            "Standard Multi End-Users (2-5)": "standard_1_5",
-            "Standard Multi End-Users (6-10)": "standard_6_10",
-            "Standard Multi End-Users (11-30)": "standard_11_30",
-            "Standard Multi End-Users (>30)": "standard_up_30",
-        }
-        if collection.value == OrderableAirbusCollection.pneo.value:
-            # PNEO collection uses different licence names
-            mappings = {
-                "Standard": "standard",
-                "Background Layer": "background_layer",
-                "Standard + Background Layer": "stand_background_layer",
-                "Academic": "Academic",
-                "Media Licence": "media",
-                "Standard Multi End-Users (2-5)": "Standard_1_5",
-                "Standard Multi End-Users (6-10)": "Standard_6_10",
-                "Standard Multi End-Users (11-30)": "Standard_11_30",
-                "Standard Multi End-Users (>30)": "Standard_up_30",
-            }
-
-        return mappings[self.value]
-
-
-class Orbit(StrEnum):
-    """Orbit types for Airbus SAR data"""
-
-    RAPID = "rapid"
-    SCIENCE = "science"
-
-
-class ResolutionVariant(StrEnum):
-    """Resolution variants for Airbus SAR data"""
-
-    RE = "RE"
-    SE = "SE"
-
-
-class Projection(StrEnum):
-    """Projection types for Airbus SAR data"""
-
-    AUTO = "Auto"
-    UTM = "UTM"
-    UPS = "UPS"
-
-    @property
-    def airbus_value(self) -> str:
-        """Map the projection type to the Airbus API value"""
-        mappings = {
-            "Auto": "auto",
-            "UTM": "UTM",
-            "UPS": "UPS",
-        }
-        return mappings[self.value]
-
-
-class RadarOptions(BaseModel):
-    """Radar options for Airbus SAR data"""
-
-    orbit: Orbit
-    resolutionVariant: ResolutionVariant | None = None
-    projection: Projection | None = None
-
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
-        """Return the model data as a dictionary to send to the Airbus API"""
-        data = super().model_dump(**kwargs)
-        data = {k: v for k, v in data.items() if v is not None}
-        if self.projection:
-            data["projection"] = self.projection.airbus_value
-        return data
-
-
-class OrderRequest(BaseModel):
-    """Request body for order endpoint"""
-
-    productBundle: ProductBundle | ProductBundleRadar
-    coordinates: list | None = Field(default_factory=list)
-    endUserCountry: str | None = None
-    licence: LicenceOptical | LicenceRadar | None = None
-    radarOptions: RadarOptions | None = None
-
-
-class QuoteRequest(BaseModel):
-    """Request body for quote endpoint"""
-
-    coordinates: list | None = None
-    licence: LicenceOptical | LicenceRadar | None = None
-    productBundle: ProductBundle | None = None
-
-
-class QuoteResponse(BaseModel):
-    """Response body for quote endpoint"""
-
-    value: float
-    units: str
-    message: str | None = None
 
 
 def validate_licence(
@@ -401,7 +219,7 @@ def validate_radar_options(
     if product_bundle == ProductBundleRadar.SSC.value and radar_options.resolutionVariant:
         raise HTTPException(
             status_code=400,
-            detail=("Resolution variant should not be provided for a radar item when the product bundle is SSC."),
+            detail="Resolution variant should not be provided for a radar item when the product bundle is SSC.",
         )
     if (
         product_bundle not in [ProductBundleRadar.SSC.value, ProductBundleRadar.MGD.value]
@@ -414,7 +232,7 @@ def validate_radar_options(
     if product_bundle in [ProductBundleRadar.SSC.value, ProductBundleRadar.MGD.value] and radar_options.projection:
         raise HTTPException(
             status_code=400,
-            detail=("Projection should not be provided for a radar item when the product bundle is SSC or MGD."),
+            detail="Projection should not be provided for a radar item when the product bundle is SSC or MGD.",
         )
     radar_bundle = radar_options.model_dump()
     radar_bundle["product_type"] = product_bundle
@@ -471,7 +289,7 @@ def upload_nested_files(
 def health_check() -> JSONResponse:
     """Health check endpoint to verify Airbus client connectivity"""
     try:
-        access_token = airbus_client.generate_access_token()
+        access_token = _airbus_client.generate_access_token()
         if isinstance(access_token, str):
             return JSONResponse(content={"status": "healthy"}, status_code=200)
         else:
@@ -744,7 +562,7 @@ def order_item(
 
     # if airbus, validate the user has the correct contract_id too before ordering
     if catalog.value == OrderableCatalogue.airbus.value:
-        _, err = airbus_client.get_contract_id(workspace, collection.value)
+        _, err = _airbus_client.get_contract_id(workspace, collection.value)
         if err is not None:
             return JSONResponse(
                 status_code=403,
@@ -822,7 +640,7 @@ def order_item(
     if collection.value in optical_collections:
         end_users = []
         if country_code := order_request.endUserCountry:
-            airbus_client.validate_country_code(country_code)
+            _airbus_client.validate_country_code(country_code)
             end_users = [{"endUserName": username, "country": country_code}]
     if collection.value == OrderableAirbusCollection.pneo.value and not end_users:
         raise HTTPException(
@@ -846,6 +664,9 @@ def order_item(
     elif collection.value in optical_collections:
         adaptor_name = "airbus-optical-adaptor"
         commercial_data_bucket = AIRBUS_DATA_BUCKET
+    elif collection.value in OrderableOpenCosmosCollection:
+        adaptor_name = "open-cosmos-adaptor"
+        commercial_data_bucket = WORKSPACE_DATA_BUCKET
     else:
         adaptor_name = "planet-adaptor"
         commercial_data_bucket = WORKSPACE_DATA_BUCKET
@@ -986,7 +807,7 @@ def quote(
     if catalog.value == OrderableCatalogue.airbus.value:
         # Get the contract ID. If contract_id is None, it is a SAR collection.
         # If err is not None, the user does not have access to the collection
-        contract_id, err = airbus_client.get_contract_id(workspace, collection.value)
+        contract_id, err = _airbus_client.get_contract_id(workspace, collection.value)
 
         if err is not None:
             return JSONResponse(
@@ -1108,14 +929,14 @@ def quote(
                 status_code=404,
                 content={"detail": f"Collection {collection.value} not recognised as an Airbus collection"},
             )
-        access_token = airbus_client.generate_access_token(workspace)
+        access_token = _airbus_client.generate_access_token(workspace)
         if not access_token:
             return JSONResponse(status_code=500, content={"detail": "Failed to generate access token"})
 
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
         try:
-            response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
+            response_body = _airbus_client.get_quote_from_airbus(url, request_body, headers)
         except requests.RequestException as e:
             error_response = e.response
             if error_response is not None:
@@ -1154,7 +975,7 @@ def quote(
                 coordinates = []
                 message = "No AOI clipping available for this collection and product bundle combination"
 
-            area = planet_client.get_area_estimate(item, collection.value, coordinates or [])
+            area = _planet_client.get_area_estimate(item, collection.value, coordinates or [])
 
             if collection.value == "SkySatScene" and area < 3:
                 # SkySatScene has a minimum order size of 3 km2
@@ -1168,6 +989,8 @@ def quote(
         except Exception as e:
             return JSONResponse(content={"message": str(e)}, status_code=400)
 
+    elif catalog.value == OrderableCatalogue.open_cosmos.value:
+        return open_cosmos_get_quote(workspace, collection.value, item)
     else:
         return JSONResponse(
             content={f"message:{catalog.value} not recognised"},
@@ -1187,7 +1010,7 @@ def fetch_airbus_asset(collection: str, item: str, asset_name: str) -> Response:
         raise HTTPException(status_code=404, detail=f"External {asset_name} link not found in item")
     logger.info(f"Fetching {asset_name} from {asset_link}")
 
-    access_token = airbus_client.generate_access_token()
+    access_token = _airbus_client.generate_access_token()
     headers = {"Authorization": f"Bearer {access_token}"}
     asset_response = requests.get(asset_link, headers=headers)
     asset_response.raise_for_status()

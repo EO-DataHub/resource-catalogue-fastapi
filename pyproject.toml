@@ -28,33 +28,34 @@ version = "0.0.0"
 description = "A FastApi deployment to handle requests to update the resource catalogue"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 authors = [
-  {name = "Telespazio UK Ltd", email = "alex.palmer@telespazio.com" }
+    { name = "Telespazio UK Ltd", email = "alex.palmer@telespazio.com" }
 ]
 maintainers = [
-  {name = "Telespazio UK Ltd", email = "alex.palmer@telespazio.com" }
+    { name = "Telespazio UK Ltd", email = "alex.palmer@telespazio.com" }
 ]
 classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Science/Research",
-  "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.13",
-  "Programming Language :: Python :: 3 :: Only",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-  "fastapi",
-  "uvicorn",
-  "requests",
-  "pyjwt",
-  "pyyaml",
-  "boto3",
-  "pulsar-client",
-  "pyproj",
-  "shapely",
-  "kubernetes",
+    "fastapi",
+    "uvicorn",
+    "requests",
+    "pyjwt",
+    "pyyaml",
+    "boto3",
+    "pyproj",
+    "shapely",
+    "kubernetes",
+    "pydantic",
+    "pulsar-client"
 ]
 
 [dependency-groups]
@@ -85,7 +86,7 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]
 markers = [
-  "integrationtest: Integration test"
+    "integrationtest: Integration test"
 ]
 
 [tool.ruff]
@@ -93,25 +94,25 @@ line-length = 119
 
 [tool.ruff.lint]
 select = [
-    "E",    # Pycodestyle errors
-    "W",    # Pycodestyle warnings
-    "F",    # Pyflakes
-    "I",    # isort
+    "E", # Pycodestyle errors
+    "W", # Pycodestyle warnings
+    "F", # Pyflakes
+    "I", # isort
     "FAST", # FastAPI
-    "RUF",  # RUF-specific rules
-    "SIM",  # Simplifications
-    "B",    # Bugbear
-    "ANN",  # Annotations
-    "PLC",  # Pylint convention
-    "PLE",  # Pylint errors
-    "UP",   # pyupgrade
+    "RUF", # RUF-specific rules
+    "SIM", # Simplifications
+    "B", # Bugbear
+    "ANN", # Annotations
+    "PLC", # Pylint convention
+    "PLE", # Pylint errors
+    "UP", # pyupgrade
     "FURB", # refurb
-    "PT",   # pytest
+    "PT", # pytest
 ]
 ignore = [
-    "E501",   # line too long
+    "E501", # line too long
     "SIM108", # ternary operator
     "SIM103", # return bool directly
-    "B008",   # function call in default argument (incompatible with FastAPI)
+    "B008", # function call in default argument (incompatible with FastAPI)
     "ANN401", # dynamically typed Any (needed for FastAPI Depends)
 ]
