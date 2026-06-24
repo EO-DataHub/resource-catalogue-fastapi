@@ -786,23 +786,25 @@ def quote(
     message = None
 
     # validate the workspace has the correct api key before quoting
-    api_key = get_api_key(catalog.value, workspace)
+    # open-cosmos uses OAuth credentials rather than an OTP-based API key
+    if catalog.value != OrderableCatalogue.open_cosmos.value:
+        api_key = get_api_key(catalog.value, workspace)
 
-    if api_key is None:
+        if api_key is None:
 
-        def a_or_an(word: str) -> str:
-            return "An" if word[0].lower() in "aeiou" else "A"
+            def a_or_an(word: str) -> str:
+                return "An" if word[0].lower() in "aeiou" else "A"
 
-        return JSONResponse(
-            status_code=403,
-            content={
-                "detail": (
-                    f"{a_or_an(catalog.value)} {catalog.value.capitalize()} API key could not be "
-                    "found for this workspace. An API key must be linked to obtain quotes for "
-                    "commercial data. Please check that an API key is linked in your workspace settings."
-                )
-            },
-        )
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": (
+                        f"{a_or_an(catalog.value)} {catalog.value.capitalize()} API key could not be "
+                        "found for this workspace. An API key must be linked to obtain quotes for "
+                        "commercial data. Please check that an API key is linked in your workspace settings."
+                    )
+                },
+            )
 
     if catalog.value == OrderableCatalogue.airbus.value:
         # Get the contract ID. If contract_id is None, it is a SAR collection.
