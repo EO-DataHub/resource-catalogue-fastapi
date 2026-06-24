@@ -1,9 +1,8 @@
 import logging
-import os
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from datetime import datetime, timedelta
 from functools import cache
-from typing import Annotated, Any
+from typing import Annotated
 
 import requests
 from fastapi import HTTPException
@@ -18,16 +17,16 @@ logger = logging.getLogger(__name__)
 
 
 def val_timestamp(value: str) -> datetime:
-    ts = float(b64decode(value)) / 1000.0
+    ts = float(b64decode(value).decode()) / 1000.0
     return datetime.fromtimestamp(ts)
 
 
 def val_int(value: str) -> int:
-    return int(b64decode(value))
+    return int(b64decode(value).decode())
 
 
 def val_str(value: str) -> str:
-    return b64decode(value).decode("utf-8")
+    return b64decode(value).decode()
 
 
 class Credentials(BaseModel):
@@ -47,17 +46,12 @@ class ContractInfo(BaseModel):
 # Refresh slightly before the token actually expires so we never hand out a
 # token that dies mid-request.
 _EXPIRY_MARGIN = timedelta(minutes=5)
-
-# Base URL of the workspace-services API that owns the oauth-open-cosmos secret.
-# It runs alongside this API, so this is expected to be set at runtime; the
-# placeholder default keeps things importable until the real address is wired in.
-WORKSPACE_SERVICES_URL = os.getenv("WORKSPACE_SERVICES_URL", "http://workspace-services-placeholder/api")
+_PROVIDER = "open-cosmos"
 
 
 # kubectl -n ws-open-cosmos-order-testing get secret oauth-open-cosmos
 def read_credentials(workspace: str) -> Credentials:
     """Read the current OAuth credentials from the workspace's Kubernetes secret."""
-    provider = "open-cosmos"
 
     try:
         # Initialize Kubernetes API client
@@ -66,7 +60,7 @@ def read_credentials(workspace: str) -> Credentials:
         namespace = f"ws-{workspace}"
 
         logging.info("Fetching credentials from Kubernetes...")
-        r: V1Secret = v1.read_namespaced_secret(f"oauth-{provider}", namespace)  # pyright: ignore
+        r: V1Secret = v1.read_namespaced_secret(f"oauth-{_PROVIDER}", namespace)  # pyright: ignore
 
         return Credentials(**r.data)  # pyright: ignore
     except ApiException as e:
@@ -102,54 +96,51 @@ def get_credentials(workspace: str) -> Credentials:
     return refresh_credentials(workspace, credentials)
 
 
-def _request_refreshed_session(credentials: Credentials) -> dict[str, Any]:
-    """Exchange the refresh token for a new Open Cosmos access token.
-
-    Expected to return the fields needed to build the workspace-services session
-    payload: ``access_token``, ``refresh_token``, ``expires_at`` (milliseconds
-    since the epoch), and optionally ``scope`` and ``token_type``.
-
-    TODO: the Open Cosmos token refresh endpoint is not yet known; stubbed until
-    then so an expired token is an explicit error rather than a confusing 401.
-    """
-    raise NotImplementedError("Open Cosmos token refresh endpoint is not yet known.")
-
-
 def refresh_credentials(workspace: str, credentials: Credentials) -> Credentials:
-    """Refresh the Open Cosmos access token and persist it for the workspace.
+    """Refresh the Open Cosmos access token and persist it for the workspace."""
 
-    1. Exchange the refresh token for a new session with Open Cosmos.
-    2. POST the new session to workspace-services, which writes it back to the
-       workspace's Kubernetes secret (oauth-open-cosmos).
-    3. Re-read and return the now-current credentials from the secret.
-    """
-    session = _request_refreshed_session(credentials)
+    # Get the client ID from somewhere
+    client_id = "blarg"
 
-    # Matches workspace-services' OpenCosmosSessionPayload. Note expiresAt is an
-    # int64 of milliseconds since the epoch, and organization_id is snake_case.
-    payload = {
-        "accessToken": session["access_token"],
-        "refreshToken": session["refresh_token"],
-        "expiresAt": session["expires_at"],
-        "scope": session.get("scope", ""),
-        "tokenType": session.get("token_type", ""),
-        "organization_id": credentials.organization_id,
-    }
+    # Refresh the access token with Open Cosmos
+    data = {"client_id": client_id, "grant_type": "refresh_token", "refresh_token": credentials.refresh_token}
+    r = requests.post("https://login.open-cosmos.com/oauth/token", data=data)
 
-    # TODO: workspace-services requires BearerAuth; wire up the token once known.
-    headers: dict[str, str] = {}
+    r.raise_for_status()
+    j = r.json()
 
-    r = requests.post(
-        f"{WORKSPACE_SERVICES_URL}/workspaces/{workspace}/open-cosmos/session",
-        json=payload,
-        headers=headers,
+    expires_at = datetime.now() + timedelta(seconds=j["expires_in"])
+    updated_credentials = credentials.model_copy(
+        update={
+            "access_token": j["access_token"],
+            "expires_at": expires_at,
+            "scope": j["scope"],
+        }
     )
 
-    try:
-        r.raise_for_status()
-    except requests.exceptions.HTTPError as e:
-        raise HTTPException(status_code=401) from e
+    # Persist the updated credentials to Kubernetes
+    # Initialize Kubernetes API client
+    config.load_incluster_config()
+    v1 = client.CoreV1Api()
+    namespace = f"ws-{workspace}"
 
+    def _encode(value: str) -> str:
+        return b64encode(value.encode()).decode()
+
+    secret_data = {
+        "access_token": _encode(updated_credentials.access_token),
+        "expires_at": _encode(str(int(updated_credentials.expires_at.timestamp() * 1000))),
+        "organization_id": _encode(str(updated_credentials.organization_id)),
+        "refresh_token": _encode(updated_credentials.refresh_token),
+        "scope": _encode(updated_credentials.scope),
+        "token_type": _encode(updated_credentials.token_type),
+    }
+    secret = client.V1Secret(data=secret_data)
+
+    logging.info("Updating credentials in Kubernetes...")
+    v1.replace_namespaced_secret(f"oauth-{_PROVIDER}", namespace, secret)
+
+    # Reread the updated credentials from Kubernetes to ensure they are up-to-date.
     return read_credentials(workspace)
 
 
