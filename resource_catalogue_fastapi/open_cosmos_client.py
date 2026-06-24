@@ -9,6 +9,7 @@ import requests
 from fastapi import HTTPException
 from kubernetes import client, config
 from kubernetes.aio.client import V1Secret
+from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel, BeforeValidator
 
 from .models import QuoteResponse
@@ -68,8 +69,21 @@ def read_credentials(workspace: str) -> Credentials:
         r: V1Secret = v1.read_namespaced_secret(f"oauth-{provider}", namespace)  # pyright: ignore
 
         return Credentials(**r.data)  # pyright: ignore
+    except ApiException as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=403,
+                detail=f"No Open Cosmos credentials found for workspace '{workspace}'. "
+                "Please link your Open Cosmos account in your workspace settings.",
+            ) from e
+        if e.status == 403:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Permission denied reading Open Cosmos credentials for workspace '{workspace}'.",
+            ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to read Open Cosmos credentials: {e.reason}") from e
     except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=f"Unexpected error reading Open Cosmos credentials: {e}") from e
 
 
 def get_credentials(workspace: str) -> Credentials:
