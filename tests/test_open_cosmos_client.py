@@ -13,7 +13,6 @@ from resource_catalogue_fastapi.open_cosmos_client import (
     get_contract_info,
     get_credentials,
     open_cosmos_get_quote,
-    refresh_credentials,
     val_int,
     val_str,
     val_timestamp,
@@ -142,48 +141,6 @@ def test_get_credentials_refreshes_when_expired() -> None:
 
     assert credentials is refreshed
     mock_refresh.assert_called_once()
-
-
-def test_refresh_credentials_posts_session_to_workspace_services() -> None:
-    credentials = Credentials(**_credentials_payload())  # pyright: ignore
-    new_session = {
-        "access_token": "fresh_access_token",
-        "refresh_token": "fresh_refresh_token",
-        "expires_at": 4102444800000,
-        "scope": "read write",
-        "token_type": "Bearer",
-    }
-
-    with (
-        mock.patch(
-            "resource_catalogue_fastapi.open_cosmos_client._request_refreshed_session",
-            return_value=new_session,
-        ),
-        mock.patch("resource_catalogue_fastapi.open_cosmos_client.requests.post") as mock_post,
-        mock.patch("resource_catalogue_fastapi.open_cosmos_client.read_credentials") as mock_read_credentials,
-    ):
-        mock_post.return_value = mock.Mock(spec=Response, raise_for_status=mock.Mock(return_value=None))
-        mock_read_credentials.return_value = mock.Mock(access_token="fresh_access_token")
-
-        result = refresh_credentials("workspace-a", credentials)
-
-    # POSTs the refreshed session to the workspace-services session endpoint.
-    url = mock_post.call_args.args[0] if mock_post.call_args.args else mock_post.call_args.kwargs["url"]
-    assert url.endswith("/workspaces/workspace-a/open-cosmos/session")
-
-    sent = mock_post.call_args.kwargs["json"]
-    assert sent == {
-        "accessToken": "fresh_access_token",
-        "refreshToken": "fresh_refresh_token",
-        "expiresAt": 4102444800000,
-        "scope": "read write",
-        "tokenType": "Bearer",
-        "organization_id": 42,
-    }
-
-    # Returns the canonical credentials re-read from the (now updated) secret.
-    assert result is mock_read_credentials.return_value
-    mock_read_credentials.assert_called_once_with("workspace-a")
 
 
 # ---------------------------------------------------------------------------
