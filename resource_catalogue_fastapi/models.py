@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 # TODO: This should be populated from the catalogue
 class OrderableOpenCosmosCollection(StrEnum):
+    accenture_1_l1c_cogs = "accenture-1-l1c-cogs"
     hammer_l1c_cogs = "hammer-l1c-cogs"
     mantis_l1d_cogs = "mantis-l1d-cogs"
     menut_l1a_cogs = "menut-l1a-cogs"

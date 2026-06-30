@@ -174,7 +174,9 @@ def get_contract_info(workspace: str) -> ContractInfo:
     return ContractInfo(contract_id=contract_id, organisation_id=credentials.organization_id)
 
 
-def _format_errors(errors: list[dict[str, str]]) -> str:
+def _format_errors(errors: list[dict[str, str]] | None) -> str:
+    if not errors:
+        return ""
     return "\n".join(error["message"] for error in errors)
 
 
