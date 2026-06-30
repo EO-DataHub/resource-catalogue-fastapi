@@ -105,7 +105,10 @@ def refresh_credentials(workspace: str, credentials: Credentials) -> Credentials
     data = {"client_id": _CLIENT_ID, "grant_type": "refresh_token", "refresh_token": credentials.refresh_token}
     r = requests.post("https://login.open-cosmos.com/oauth/token", data=data)
 
-    r.raise_for_status()
+    try:
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        raise HTTPException(status_code=401, detail="Failed to refresh Open Cosmos access token.") from e
     j = r.json()
 
     expires_at = datetime.now() + timedelta(seconds=j["expires_in"])
@@ -113,7 +116,7 @@ def refresh_credentials(workspace: str, credentials: Credentials) -> Credentials
         update={
             "access_token": j["access_token"],
             "expires_at": expires_at,
-            "scope": j["scope"],
+            "scope": j.get("scope", credentials.scope),
         }
     )
 
@@ -137,7 +140,12 @@ def refresh_credentials(workspace: str, credentials: Credentials) -> Credentials
     secret = client.V1Secret(data=secret_data)
 
     logging.info("Updating credentials in Kubernetes...")
-    v1.replace_namespaced_secret(f"oauth-{_PROVIDER}", namespace, secret)
+    try:
+        v1.replace_namespaced_secret(f"oauth-{_PROVIDER}", namespace, secret)
+    except ApiException as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to persist refreshed Open Cosmos credentials: {e.reason}"
+        ) from e
 
     # Reread the updated credentials from Kubernetes to ensure they are up-to-date.
     return read_credentials(workspace)
