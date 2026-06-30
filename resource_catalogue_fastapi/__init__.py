@@ -553,12 +553,13 @@ def order_item(
         )
 
     # validate an api key exists before ordering
-    api_key = get_api_key(catalog.value, workspace)
-    if api_key is None:
-        return JSONResponse(
-            status_code=403,
-            content={"detail": "You do not have access to order this item"},
-        )
+    if catalog.value != OrderableCatalogue.open_cosmos.value:
+        api_key = get_api_key(catalog.value, workspace)
+        if api_key is None:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "You do not have access to order this item"},
+            )
 
     # if airbus, validate the user has the correct contract_id too before ordering
     if catalog.value == OrderableCatalogue.airbus.value:
