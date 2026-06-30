@@ -1,4 +1,5 @@
 import logging
+import os
 from base64 import b64decode, b64encode
 from datetime import datetime, timedelta
 from functools import cache
@@ -47,6 +48,7 @@ class ContractInfo(BaseModel):
 # token that dies mid-request.
 _EXPIRY_MARGIN = timedelta(minutes=5)
 _PROVIDER = "open-cosmos"
+_CLIENT_ID = os.getenv("OPEN_COSMOS_CLIENT_ID_REFRESH", "")
 
 
 # kubectl -n ws-open-cosmos-order-testing get secret oauth-open-cosmos
@@ -99,11 +101,8 @@ def get_credentials(workspace: str) -> Credentials:
 def refresh_credentials(workspace: str, credentials: Credentials) -> Credentials:
     """Refresh the Open Cosmos access token and persist it for the workspace."""
 
-    # Get the client ID from somewhere
-    client_id = "blarg"
-
     # Refresh the access token with Open Cosmos
-    data = {"client_id": client_id, "grant_type": "refresh_token", "refresh_token": credentials.refresh_token}
+    data = {"client_id": _CLIENT_ID, "grant_type": "refresh_token", "refresh_token": credentials.refresh_token}
     r = requests.post("https://login.open-cosmos.com/oauth/token", data=data)
 
     r.raise_for_status()
