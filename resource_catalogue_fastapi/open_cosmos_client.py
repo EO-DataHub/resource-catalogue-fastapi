@@ -143,7 +143,9 @@ def refresh_credentials(workspace: str, credentials: Credentials) -> Credentials
     try:
         v1.replace_namespaced_secret(f"oauth-{_PROVIDER}", namespace, secret)
     except ApiException as e:
-        raise HTTPException(status_code=500, detail=f"Failed to persist refreshed Open Cosmos credentials: {e.reason}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to persist refreshed Open Cosmos credentials: {e.reason}"
+        ) from e
 
     # Reread the updated credentials from Kubernetes to ensure they are up-to-date.
     return read_credentials(workspace)
