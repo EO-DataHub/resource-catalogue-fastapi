@@ -137,7 +137,10 @@ def refresh_credentials(workspace: str, credentials: Credentials) -> Credentials
         "scope": _encode(updated_credentials.scope),
         "token_type": _encode(updated_credentials.token_type),
     }
-    secret = client.V1Secret(data=secret_data)
+    secret = client.V1Secret(
+        metadata=client.V1ObjectMeta(name=f"oauth-{_PROVIDER}", namespace=namespace),
+        data=secret_data,
+    )
 
     logging.info("Updating credentials in Kubernetes...")
     try:
