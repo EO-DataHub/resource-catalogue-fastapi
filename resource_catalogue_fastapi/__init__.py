@@ -602,7 +602,7 @@ def order_item(
         workspace,
         order_options,
         WORKSPACE_DATA_BUCKET,
-        tag,
+        tag if catalog.value != OrderableCatalogue.open_cosmos.value else "",
         location_url,
     )
 
