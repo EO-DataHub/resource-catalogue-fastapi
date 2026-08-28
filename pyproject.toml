@@ -73,6 +73,7 @@ dev = [
 ]
 
 [tool.uv]
+exclude-newer = "7 days"
 package = true
 
 [project.urls]
