@@ -13,7 +13,6 @@ class OrderableOpenCosmosCollection(StrEnum):
     menut_l1a_cogs = "menut-l1a-cogs"
     menut_l1b_cogs = "menut-l1b-cogs"
     menut_l1c_cogs = "menut-l1c-cogs"
-    platero_l1c_cogs = "platero-l1c-cogs"
 
 
 # For some reason Planet collections come from an environment variable. Why not Airbus too?
