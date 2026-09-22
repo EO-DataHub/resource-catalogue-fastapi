@@ -17,6 +17,7 @@ from collections.abc import Iterator
 from unittest.mock import patch
 
 import jwt
+import jwt.utils
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
