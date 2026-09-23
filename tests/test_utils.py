@@ -36,7 +36,7 @@ def _request(authorization: str | None) -> Request:
     return Request({"type": "http", "headers": headers, "path_params": {}})
 
 
-def _token(key: RSAPrivateKey, aud: str = "account", **claims: object) -> str:
+def _token(key: RSAPrivateKey, aud: str = "eodh", **claims: object) -> str:
     return jwt.encode(
         {"sub": "test-user", "preferred_username": "test-user", "aud": aud, **claims}, key, algorithm="RS256"
     )
@@ -67,7 +67,7 @@ def test_a_forged_signature_is_rejected() -> None:
     """
     header = jwt.utils.base64url_encode(b'{"alg":"RS256","typ":"JWT"}').decode()
     payload = jwt.utils.base64url_encode(
-        b'{"sub":"attacker","preferred_username":"attacker","workspaces":["test_workspace"],"aud":"account"}'
+        b'{"sub":"attacker","preferred_username":"attacker","workspaces":["test_workspace"],"aud":"eodh"}'
     ).decode()
     forged_signature = jwt.utils.base64url_encode(b"not-a-real-signature").decode()
     forged_token = f"{header}.{payload}.{forged_signature}"
