@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 from enum import StrEnum
+from functools import lru_cache
 from typing import Any
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -16,6 +17,7 @@ import jwt
 import requests
 from botocore.exceptions import ClientError
 from fastapi import Depends, HTTPException, Request
+from jwt import PyJWKClient, PyJWTError
 from kubernetes import client, config
 from shapely.geometry import mapping, shape
 
@@ -23,6 +25,26 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ADES_URL = os.getenv("ADES_URL")
 WORKSPACES_CLAIM_PATH = os.getenv("WORKSPACES_CLAIM_PATH", "workspaces")
+
+# Domain used to build the Keycloak JWKS endpoint for verifying JWT signatures - the same
+# value used elsewhere in this module to build platform URLs.
+EODH_DOMAIN = os.getenv("EODH_DOMAIN", "dev.eodatahub.org.uk")
+KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "eodhp")
+
+# The Keycloak client IDs platform tokens are issued for (the audience mappers on the eodh and
+# eodh-workspaces clients, eodhp-argocd-deployment apps/keycloak/base/realms.yaml). This list is
+# duplicated across the platform's services, so change them together.
+JWT_AUDIENCE = ["eodh", "eodh-workspaces"]
+
+
+@lru_cache
+def _jwks_client() -> PyJWKClient:
+    """One client per process, so the JWKS document is cached rather than re-fetched from
+    Keycloak on every request. PyJWKClient does this caching internally, but only across
+    calls on the same instance.
+    """
+    certs_url = f"https://{EODH_DOMAIN}/keycloak/realms/{KEYCLOAK_REALM}/protocol/openid-connect/certs"
+    return PyJWKClient(certs_url)
 
 
 def strtobool(val: str) -> bool:
@@ -83,11 +105,22 @@ def get_user_details(request: Request) -> tuple:
     token = request.headers.get("authorization", "")
     stripped_token = token.replace("Bearer ", "")
     if stripped_token:
-        credentials = jwt.decode(
-            stripped_token,
-            options={"verify_signature": False},
-            algorithms=["HS256"],
-        )
+        # The signature is verified against Keycloak's own published key, rather than
+        # trusting an upstream gateway to have checked it: a gateway sitting in front of the
+        # public path does not cover traffic that reaches this service directly from
+        # elsewhere on the cluster network.
+        try:
+            signing_key = _jwks_client().get_signing_key_from_jwt(stripped_token)
+            credentials = jwt.decode(
+                stripped_token,
+                signing_key.key,
+                audience=JWT_AUDIENCE,
+                algorithms=["RS256"],
+            )
+        except PyJWTError as e:
+            logger.warning(f"Rejected invalid JWT: {e}")
+            raise HTTPException(status_code=401, detail="Invalid JWT token") from e
+
         logging.debug(f"Credentials: {credentials}")
         username = credentials.get("preferred_username", "")
         workspaces = get_nested_value(credentials, WORKSPACES_CLAIM_PATH, [])
